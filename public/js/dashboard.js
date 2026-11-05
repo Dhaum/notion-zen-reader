@@ -1,276 +1,309 @@
-// public/js/dashboard.js - 데스크탑 학습 대시보드 및 잔디 히트맵
+// public/js/dashboard.js - Clinical-SM2 에빙하우스 망각곡선 & Bento Grid 학습 대시보드
 const Dashboard = {
   async load() {
     const container = document.getElementById('dashboard-content');
-    container.innerHTML = '<div style="text-align: center; padding: 60px 0; color: var(--text-muted);">학습 통계를 불러오는 중입니다...</div>';
+    if (!container) return;
+    container.innerHTML = '<div style="text-align: center; padding: 60px 0; color: var(--text-muted);">골든타임 복습 데이터 및 마스터리를 분석하는 중입니다...</div>';
 
     try {
-      // 1. 태블릿 영구 스토리지(IndexedDB) 우선 집계 (0초 딜레이, 영구 보존 잔디)
+      // 1. 전체 140개 문서 모수 확보
+      const allDocs = (typeof App !== 'undefined' && App.documents) ? App.documents : [];
+      
+      // 2. 태블릿 IndexedDB 기반 Clinical-SM2 고급 통계 산출
       if (typeof ZenStorage !== 'undefined') {
-        const localStats = await ZenStorage.calculateStats();
-        if (localStats && (localStats.summary.totalReviews > 0 || !navigator.onLine)) {
-          this.render(localStats, false);
-          return;
-        }
+        const advStats = await ZenStorage.calculateAdvancedStats(allDocs);
+        this.render(advStats);
+        return;
       }
 
-      // 2. 로컬 기록이 아직 0건일 때 서버 통계 시도
+      // 3. 만약 ZenStorage가 없으면 서버 API 폴백
       const response = await fetch('/api/study-stats', {
         headers: {
           'x-zen-pin': localStorage.getItem('zen_pin_code') || ''
         }
       });
-      if (response.status === 401) {
-        if (typeof App !== 'undefined' && App.handleUnauthorized) {
-          App.handleUnauthorized();
-        }
+      if (response.status === 401 && typeof App !== 'undefined') {
+        App.handleUnauthorized();
         throw new Error("인증 실패: 올바른 PIN 번호가 필요합니다.");
       }
       const data = await response.json();
       if (data.success && data.stats) {
         this.render(data.stats);
-        return;
-      }
-
-      // 3. 서버 응답이 없으면 빈 로컬 통계 렌더링
-      if (typeof ZenStorage !== 'undefined') {
-        const localStats = await ZenStorage.calculateStats();
-        this.render(localStats, false);
+      } else {
+        throw new Error(data.error || "통계 로딩 실패");
       }
     } catch (err) {
-      console.warn('[Dashboard] 통계 로딩 처리 중 오류, 로컬 스토리지로 렌더링:', err);
-      if (typeof ZenStorage !== 'undefined') {
-        const localStats = await ZenStorage.calculateStats();
-        this.render(localStats, false);
-        return;
-      }
-
+      console.warn('[Dashboard] 통계 로딩 실패:', err);
       container.innerHTML = `
         <div style="text-align: center; padding: 40px; color: var(--danger);">
           <h3>통계 로딩 실패</h3>
-          <p style="margin: 10px 0; color: var(--text-muted);">${err.message}</p>
+          <p style="margin: 10px 0; color: var(--text-muted); font-size: 0.88rem;">${err.message}</p>
+          <button class="btn btn-primary" onclick="Dashboard.load()">다시 시도</button>
         </div>
       `;
     }
   },
 
-  // 로컬 영구 저장소(IndexedDB 및 localStorage)를 기반으로 오프라인 통계 생성
-  async buildOfflineStats() {
-    try {
-      let logs = [];
-      if (window.OfflineManager && typeof OfflineManager.getAllFromIndexedDB === 'function') {
-        logs = await OfflineManager.getAllFromIndexedDB();
-      }
-      if (!logs || logs.length === 0) {
-        const raw = localStorage.getItem('zen_permanent_logs');
-        logs = raw ? JSON.parse(raw) : [];
-      }
-      if (!logs || logs.length === 0) return null;
-
-      const todayStr = new Date().toISOString().slice(0, 10);
-      let todayCount = 0;
-      let totalDuration = 0;
-      const uniqueDocs = new Set();
-      const heatmap = {};
-
-      // 90일 기본 히트맵
-      const now = new Date();
-      for (let i = 89; i >= 0; i--) {
-        const d = new Date(now);
-        d.setDate(d.getDate() - i);
-        heatmap[d.toISOString().slice(0, 10)] = 0;
-      }
-
-      logs.forEach(log => {
-        const dateStr = (log.readAt || log.timestamp || '').slice(0, 10);
-        if (dateStr === todayStr) todayCount++;
-        totalDuration += log.durationSeconds || 0;
-        if (log.docId) uniqueDocs.add(log.docId);
-        if (heatmap[dateStr] !== undefined) {
-          heatmap[dateStr] = (heatmap[dateStr] || 0) + 1;
-        }
-      });
-
-      return {
-        summary: {
-          todayReviews: todayCount,
-          totalReviews: logs.length,
-          uniqueDocsCount: uniqueDocs.size,
-          totalStudyMinutes: Math.round(totalDuration / 60)
-        },
-        heatmap,
-        recommendations: [],
-        recentLogs: logs.slice(0, 15)
-      };
-    } catch (e) {
-      console.warn('[Dashboard] 오프라인 통계 빌드 실패:', e);
-      return null;
-    }
-  },
-
-  render(stats, isOfflineMode = false) {
+  render(stats) {
     const container = document.getElementById('dashboard-content');
-    const { summary, heatmap, recommendations, recentLogs } = stats;
+    if (!container) return;
 
-    let html = '';
+    const summary = stats.summary || {
+      currentStreak: 1,
+      totalReviews: 0,
+      totalDocuments: 140,
+      studiedDocsCount: 0,
+      coverageRate: 0,
+      todayReviews: 0,
+      totalStudyMinutes: 0
+    };
+    const heatmap = stats.heatmap || {};
+    const goldenQueue = stats.goldenQueue || [];
+    const categoryStats = stats.categoryStats || {};
+    const recentLogs = stats.recentLogs || [];
 
-    if (isOfflineMode) {
-      html += `
-        <div style="background: rgba(245, 158, 11, 0.12); border: 1px solid var(--warning); border-radius: 12px; padding: 12px 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; color: var(--warning); font-size: 0.88rem;">
-          <span style="font-size: 1.2rem;">🔒</span>
+    let html = `
+      <!-- A. 최상단 스트릭 및 핵심 요약 벤토 배너 -->
+      <div class="dash-summary-banner">
+        <div class="streak-badge">
+          <span style="font-size: 2rem;">🔥</span>
           <div>
-            <strong>오프라인 영구 저장소 모드</strong>: 태블릿 기기 로컬 IndexedDB에 영구 보존된 학습 기록으로 대시보드를 표시 중입니다. (온라인 연결 시 중앙 서버와 자동 동기화)
+            <div style="font-size: 1.25rem; font-weight: 800; color: #f59e0b; display: flex; align-items: center; gap: 8px;">
+              <span>${summary.currentStreak || 1}일 연속 학습 중</span>
+              <span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 9999px; background: rgba(245, 158, 11, 0.18); color: #f59e0b; font-weight: 600;">Long-term Streak</span>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 3px;">
+              매일의 골든타임 복습이 140개 임상 지식을 완전한 장기 기억으로 정착시킵니다.
+            </div>
           </div>
         </div>
-      `;
-    }
-
-    html += `
-      <!-- 1. 핵심 요약 카드 -->
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-value">${summary.todayReviews}</div>
-          <div class="stat-label">오늘 복습한 문서</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">${summary.totalReviews}</div>
-          <div class="stat-label">총 누적 복습 횟수</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">${summary.uniqueDocsCount}</div>
-          <div class="stat-label">학습한 지식 문서</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">${summary.totalStudyMinutes}분</div>
-          <div class="stat-label">누적 집중 시간</div>
+        <div class="summary-pills">
+          <div class="pill-item">
+            <span class="label">총 회독수</span>
+            <span class="val highlight">${summary.totalReviews}회</span>
+          </div>
+          <div class="pill-item">
+            <span class="label">지식 커버리지</span>
+            <span class="val">${summary.studiedDocsCount} / ${summary.totalDocuments} <span style="font-size: 0.75rem; color: var(--accent); font-weight: 600;">(${summary.coverageRate}%)</span></span>
+          </div>
+          <div class="pill-item">
+            <span class="label">오늘 복습</span>
+            <span class="val">${summary.todayReviews}개</span>
+          </div>
+          <div class="pill-item">
+            <span class="label">누적 집중 시간</span>
+            <span class="val">${summary.totalStudyMinutes}분</span>
+          </div>
         </div>
       </div>
 
-      <!-- 2. 잔디 히트맵 (최근 90일) -->
-      <div class="heatmap-container">
-        <div class="heatmap-title">
-          <span>📅 최근 90일 복습 잔디 (Study Heatmap)</span>
-          <span style="font-size: 0.8rem; color: var(--text-muted);">총 ${summary.totalReviews}회 학습 기록됨</span>
-        </div>
-        <div class="heatmap-grid" id="heatmap-grid-cells">
+      <!-- B. 2열 Bento Grid 반응형 레이아웃 (태블릿 가로 & 데스크탑) -->
+      <div class="dash-responsive-layout">
+        
+        <!-- 좌측 열: 오늘의 골든타임 Top 5 큐 + 카테고리 마스터리 -->
+        <div class="dash-col-primary">
+          
+          <!-- 1. 오늘의 골든타임 복습 Top 5 큐 -->
+          <div class="dash-panel">
+            <div class="panel-header">
+              <div>
+                <span class="title">🎯 오늘의 골든타임 복습 Top 5</span>
+                <span class="subtitle">망각 곡선 임계 도래 우선순위</span>
+              </div>
+              <span style="font-size: 0.75rem; color: var(--accent); font-weight: 600;">Clinical-SM2</span>
+            </div>
+            <div class="golden-queue-list">
     `;
 
-    // 히트맵 셀 생성
-    const dateKeys = Object.keys(heatmap).sort();
-    dateKeys.forEach(date => {
-      const count = heatmap[date];
-      let level = 0;
-      if (count >= 4) level = 4;
-      else if (count >= 2) level = 3;
-      else if (count >= 1) level = 2;
-
-      html += `
-        <div class="heatmap-cell level-${level}" title="${date}: ${count}회 복습"></div>
-      `;
-    });
-
-    html += `
-        </div>
-      </div>
-
-      <!-- 3. 망각 곡선 복습 추천 큐 -->
-      <div style="margin-bottom: 24px;">
-        <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-          🔔 에빙하우스 망각 곡선 복습 추천
-          <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted);">(복습 주기가 도래한 문서)</span>
-        </h3>
-        <div class="recommend-list">
-    `;
-
-    if (recommendations && recommendations.length > 0) {
-      recommendations.slice(0, 6).forEach(item => {
-        let badgeClass = "urgency-NORMAL";
-        let urgencyText = `${item.diffDays}일 전 복습`;
-        if (item.diffDays >= 14) {
-          badgeClass = "urgency-CRITICAL";
-          urgencyText = `🚨 ${item.diffDays}일 경과 (시급)`;
-        } else if (item.diffDays >= 7) {
-          badgeClass = "urgency-WARNING";
-          urgencyText = `⚠️ ${item.diffDays}일 경과 (권장)`;
+    if (goldenQueue && goldenQueue.length > 0) {
+      goldenQueue.forEach((doc, idx) => {
+        let badgeHtml = '';
+        if (doc.urgencyBadge === 'CRITICAL') {
+          badgeHtml = `<span class="badge-urgent-critical">🚨 긴급 (${doc.diffDays}일 전)</span>`;
+        } else if (doc.urgencyBadge === 'DUE') {
+          badgeHtml = `<span class="badge-urgent-due">⚠️ 도래 (${doc.diffDays}일 전)</span>`;
+        } else if (doc.urgencyBadge === 'NEW') {
+          badgeHtml = `<span class="badge-urgent-new">🆕 신규 미학습</span>`;
+        } else {
+          badgeHtml = `<span class="badge-urgent-stable">🟢 주기 ${doc.intervalDays || 1}일</span>`;
         }
 
         html += `
-          <div class="recommend-item">
-            <div>
-              <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 4px;">
-                ${this.escapeHtml(item.docTitle)}
-              </div>
-              <div style="font-size: 0.8rem; color: var(--text-muted);">
-                누적 ${item.reviewCount}회독 | 마지막 복습: ${new Date(item.lastReviewedAt).toLocaleDateString()}
+          <div class="queue-card">
+            <div class="queue-card-left">
+              <div class="queue-idx">${idx + 1}</div>
+              <div class="queue-info">
+                <div class="queue-title" title="${this.escapeHtml(doc.title)}">${this.escapeHtml(doc.title)}</div>
+                <div class="queue-meta">
+                  <span class="cat-tag">${this.escapeHtml(doc.category || '임상약학')}</span>
+                  <span>누적 ${doc.reviewCount || 0}회독</span>
+                  <span>권장 주기: ${doc.intervalDays || 1}일</span>
+                </div>
               </div>
             </div>
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <span class="urgency-badge ${badgeClass}">${urgencyText}</span>
-              <button class="btn btn-primary" style="font-size: 0.8rem; padding: 5px 12px;" onclick="Reader.open('${item.docId}')">
-                복습하기
+            <div class="queue-card-right">
+              ${badgeHtml}
+              <button class="btn btn-primary btn-sm touch-target" onclick="Reader.open('${doc.id}')">
+                원터치 복습
               </button>
             </div>
           </div>
         `;
       });
     } else {
-      html += '<div style="color: var(--text-muted); padding: 16px; text-align: center;">추천할 복습 문서가 없습니다. 새로운 지식을 탐색해 보세요!</div>';
+      html += `
+        <div style="text-align: center; padding: 32px 16px; color: var(--text-muted); background: var(--bg-secondary); border-radius: 10px;">
+          <div style="font-size: 1.8rem; margin-bottom: 6px;">🎉</div>
+          <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">오늘의 골든타임 복습을 모두 달성했습니다!</div>
+          <div style="font-size: 0.8rem;">아래 임상 카테고리에서 미착수(Level 0) 노트를 골라 새로운 지식을 정복해보세요.</div>
+        </div>
+      `;
     }
 
     html += `
-        </div>
-      </div>
+            </div>
+          </div>
 
-      <!-- 4. 최근 복습 타임라인 로그 -->
-      <div>
-        <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 12px;">
-          📜 최근 복습 히스토리
-        </h3>
-        <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden;">
+          <!-- 2. 임상 도메인별 마스터리 (4단계 스택트 프로그레스) -->
+          <div class="dash-panel" style="margin-top: 20px;">
+            <div class="panel-header">
+              <div>
+                <span class="title">📊 임상 도메인별 마스터리</span>
+                <span class="subtitle">140개 노트 4단계 회독 숙련도 분포</span>
+              </div>
+            </div>
+            <div class="category-bars-list">
     `;
 
-    if (recentLogs && recentLogs.length > 0) {
-      recentLogs.slice(0, 10).forEach((log, idx) => {
-        const timeStr = new Date(log.readAt).toLocaleString();
+    const catKeys = Object.keys(categoryStats);
+    if (catKeys.length > 0) {
+      catKeys.forEach(cat => {
+        const c = categoryStats[cat];
+        const masterPct = Math.round(((c.level1 + c.level2 + c.level3) / c.total) * 100);
+        const isWeak = (c.level0 / c.total) >= 0.4;
+
         html += `
-          <div style="padding: 12px 16px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; font-size: 0.88rem;">
-            <div>
-              <span style="color: var(--accent); font-weight: 600;">[${log.device || '태블릿'}]</span>
-              <span style="font-weight: 500; margin-left: 6px;">${this.escapeHtml(log.docTitle)}</span>
+          <div class="category-item">
+            <div class="category-info-row">
+              <span class="cat-name">
+                <strong>${this.escapeHtml(cat)}</strong>
+                <span style="color: var(--text-muted); font-size: 0.78rem; margin-left: 4px;">(${c.total}개)</span>
+                ${isWeak ? '<span class="weak-badge">⚠️ 취약 영역: 보완 권장</span>' : ''}
+              </span>
+              <span class="cat-pct">${masterPct}% 착수</span>
             </div>
-            <div style="color: var(--text-muted); font-size: 0.8rem;">
-              ${timeStr} (${Math.round(log.durationSeconds / 60)}분)
+            <div class="stacked-progress-bar">
+              <div class="bar-segment seg-l3" style="width: ${(c.level3 / c.total) * 100}%;" title="마스터(5회독+): ${c.level3}개"></div>
+              <div class="bar-segment seg-l2" style="width: ${(c.level2 / c.total) * 100}%;" title="정착기(3-4회독): ${c.level2}개"></div>
+              <div class="bar-segment seg-l1" style="width: ${(c.level1 / c.total) * 100}%;" title="입문(1-2회독): ${c.level1}개"></div>
+              <div class="bar-segment seg-l0" style="width: ${(c.level0 / c.total) * 100}%;" title="미착수: ${c.level0}개"></div>
             </div>
           </div>
         `;
       });
     } else {
-      html += '<div style="padding: 20px; text-align: center; color: var(--text-muted);">아직 학습 로그가 없습니다.</div>';
+      html += '<div style="color: var(--text-muted); padding: 16px; text-align: center;">카테고리 정보를 분석 중입니다...</div>';
     }
 
     html += `
-        </div>
-      </div>
+              <div class="mastery-legend">
+                <span class="legend-dot"><span class="dot-box seg-l3"></span>마스터 (5회독+)</span>
+                <span class="legend-dot"><span class="dot-box seg-l2"></span>정착기 (3~4회독)</span>
+                <span class="legend-dot"><span class="dot-box seg-l1"></span>입문 (1~2회독)</span>
+                <span class="legend-dot"><span class="dot-box seg-l0"></span>미착수 (0회독)</span>
+              </div>
+            </div>
+          </div>
 
-      <!-- 5. 태블릿 데이터 백업 및 복원 (영구 보존 세이프티 넷) -->
-      <div style="margin-top: 24px; padding: 16px 20px; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
-        <div>
-          <div style="font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
-            <span>🛡️ 태블릿 로컬 데이터 관리</span>
-            <span style="font-size: 0.75rem; background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; color: var(--success); font-weight: normal;">IndexedDB 영구 보존 활성화</span>
-          </div>
-          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
-            기기 변경이나 백업이 필요할 때 JSON 파일로 안전하게 보관하세요.
-          </div>
         </div>
-        <div style="display: flex; gap: 8px;">
-          <button class="btn" style="font-size: 0.82rem; padding: 6px 14px;" onclick="ZenStorage.exportBackupJSON()">
-            📦 백업 다운로드
-          </button>
-          <label class="btn" style="font-size: 0.82rem; padding: 6px 14px; cursor: pointer; margin-bottom: 0;">
-            📥 백업 복원
-            <input type="file" accept=".json" style="display: none;" onchange="Dashboard.handleImportBackup(this)">
-          </label>
+
+        <!-- 우측 열: 90일 복습 잔디 히트맵 + 최근 기록 + 백업/복원 -->
+        <div class="dash-col-secondary">
+          
+          <!-- 3. 복습 잔디 히트맵 -->
+          <div class="dash-panel">
+            <div class="panel-header">
+              <div>
+                <span class="title">📅 최근 90일 복습 잔디</span>
+                <span class="subtitle">누적 ${summary.totalReviews}회 학습 기록</span>
+              </div>
+            </div>
+            <div class="heatmap-container" style="margin-bottom: 0;">
+              <div class="heatmap-grid" id="heatmap-grid-cells">
+    `;
+
+    Object.keys(heatmap).sort().forEach(date => {
+      const count = heatmap[date];
+      let level = 0;
+      if (count >= 4) level = 4;
+      else if (count >= 2) level = 3;
+      else if (count >= 1) level = 2;
+      html += `<div class="heatmap-cell level-${level}" title="${date}: ${count}회 복습"></div>`;
+    });
+
+    html += `
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. 최근 복습 타임라인 로그 -->
+          <div class="dash-panel" style="margin-top: 20px;">
+            <div class="panel-header">
+              <span class="title">📜 최근 복습 로그</span>
+            </div>
+            <div class="recent-logs-box">
+    `;
+
+    if (recentLogs && recentLogs.length > 0) {
+      recentLogs.slice(0, 8).forEach(l => {
+        const t = new Date(l.readAt || l.timestamp).toLocaleDateString();
+        const mins = Math.max(1, Math.round((Number(l.durationSeconds) || 60) / 60));
+        let feedbackLabel = '🔵 적정';
+        if (l.feedback === 'easy') feedbackLabel = '🟢 수월함';
+        else if (l.feedback === 'hard') feedbackLabel = '🔴 헷갈림';
+
+        html += `
+          <div class="recent-log-row">
+            <div class="recent-log-main">
+              <span class="log-title">${this.escapeHtml(l.docTitle || '제목 없음')}</span>
+              <span class="log-meta">${t} · ${mins}분 체류 · ${feedbackLabel}</span>
+            </div>
+            <button class="btn btn-sm" style="padding: 3px 8px; font-size: 0.75rem;" onclick="Reader.open('${l.docId}')">열기</button>
+          </div>
+        `;
+      });
+    } else {
+      html += '<div style="color: var(--text-muted); padding: 16px; text-align: center; font-size: 0.85rem;">아직 기록된 복습 로그가 없습니다.</div>';
+    }
+
+    html += `
+            </div>
+          </div>
+
+          <!-- 5. 태블릿 데이터 백업 및 복원 (영구 보존 세이프티 넷) -->
+          <div class="dash-panel" style="margin-top: 20px; background: rgba(30, 41, 59, 0.4);">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+              <div>
+                <div style="font-weight: 700; font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
+                  <span>🛡️ 태블릿 로컬 DB 보존</span>
+                  <span style="font-size: 0.72rem; background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 6px; border-radius: 4px; font-weight: 600;">IndexedDB Persist</span>
+                </div>
+                <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 4px;">
+                  Vercel 서버리스와 무관하게 태블릿 SSD에 영구 보존됩니다.
+                </div>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-sm" onclick="ZenStorage.exportBackupJSON()">
+                  📦 백업 JSON
+                </button>
+                <label class="btn btn-sm" style="cursor: pointer; margin-bottom: 0;">
+                  📥 복원
+                  <input type="file" accept=".json" style="display: none;" onchange="Dashboard.handleImportBackup(this)">
+                </label>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     `;
@@ -283,7 +316,9 @@ const Dashboard = {
     const file = input.files[0];
     try {
       const count = await ZenStorage.importBackupJSON(file);
-      App.showToast(`✨ ${count}건의 학습 기록이 성공적으로 복원되었습니다!`);
+      if (typeof App !== 'undefined' && App.showToast) {
+        App.showToast(`✨ ${count}건의 학습 기록이 성공적으로 복원되었습니다!`);
+      }
       this.load();
       if (typeof App !== 'undefined' && App.loadDocuments) {
         App.loadDocuments();

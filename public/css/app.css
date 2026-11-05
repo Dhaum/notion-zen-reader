@@ -2,53 +2,61 @@
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
 
 :root {
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-card: #1e293b;
-  --bg-card-hover: #334155;
-  --border-color: #334155;
-  --text-primary: #f8fafc;
+  --font-family-display: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-family-mono: "JetBrains Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
+  --bg-primary: #0c0f17; /* Deep Obsidian Dark */
+  --bg-secondary: #141923;
+  --bg-card: #141923;
+  --bg-card-hover: #1c2331;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --text-primary: #f1f5f9;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
   --accent: #38bdf8;
   --accent-hover: #0ea5e9;
-  --accent-subtle: rgba(56, 189, 248, 0.15);
+  --accent-subtle: rgba(56, 189, 248, 0.14);
   --success: #10b981;
   --warning: #f59e0b;
   --danger: #ef4444;
+  --dock-bg: rgba(20, 25, 35, 0.88);
+  --dock-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.09);
   --font-base: 17.5px;
   --line-height-base: 1.85;
-  --content-max-width: 740px;
+  --content-max-width: 760px;
 }
 
-/* 라이트(종이) 테마 */
+/* Warm Cream Paper Light (Munken Print 북유럽 고급 서적 톤) */
 body.theme-light {
-  --bg-primary: #fdfbf7;
-  --bg-secondary: #f4ede2;
+  --bg-primary: #f7f4ee;
+  --bg-secondary: #ebe6dc;
   --bg-card: #ffffff;
-  --bg-card-hover: #f8f4ed;
-  --border-color: #e5ded3;
-  --text-primary: #1c1917;
-  --text-secondary: #57534e;
-  --text-muted: #854d0e;
+  --bg-card-hover: #f3eee6;
+  --border-color: rgba(0, 0, 0, 0.08);
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
   --accent: #0284c7;
   --accent-hover: #0369a1;
   --accent-subtle: rgba(2, 132, 199, 0.1);
+  --dock-bg: rgba(255, 255, 255, 0.92);
+  --dock-shadow: 0 10px 28px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
-/* 세피아(눈 편한) 테마 */
+/* Muted Amber Sepia (2700K 킨들 웜라이트 취침 전 안락 모드) */
 body.theme-sepia {
-  --bg-primary: #f5ebd7;
-  --bg-secondary: #ebdcc2;
-  --bg-card: #faf3e6;
-  --bg-card-hover: #f0e2ca;
-  --border-color: #d8c4a4;
-  --text-primary: #382c1e;
-  --text-secondary: #63523f;
-  --text-muted: #8c765c;
+  --bg-primary: #f2e8d5;
+  --bg-secondary: #e6dbbf;
+  --bg-card: #f9f2e4;
+  --bg-card-hover: #ece0c6;
+  --border-color: #d8c9a8;
+  --text-primary: #2d2417;
+  --text-secondary: #574834;
+  --text-muted: #826e54;
   --accent: #b45309;
   --accent-hover: #92400e;
   --accent-subtle: rgba(180, 83, 9, 0.12);
+  --dock-bg: rgba(249, 242, 228, 0.94);
+  --dock-shadow: 0 10px 28px rgba(78, 55, 25, 0.16), 0 0 0 1px rgba(180, 83, 9, 0.15);
 }
 
 /* 폰트 크기 옵션 */
@@ -98,6 +106,11 @@ body {
   align-items: center;
   justify-content: space-between;
   backdrop-filter: blur(8px);
+  transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease;
+}
+
+.zen-header.header-hidden {
+  transform: translateY(-100%);
 }
 
 .zen-header-left {
@@ -780,8 +793,22 @@ body.theme-sepia .notion-color-red { color: #b91c1c; }
   background-color: var(--bg-card-hover);
 }
 
+/* 임상 약학 대형 표: 첫 번째 열 좌측 스티키 고정 (터치 가로 스크롤 가독성 보장) */
+.zen-table th:first-child,
+.zen-table td:first-child {
+  position: sticky;
+  left: 0;
+  background-color: var(--bg-card);
+  z-index: 2;
+  font-weight: 700;
+  box-shadow: 3px 0 8px rgba(0, 0, 0, 0.12);
+}
+.zen-table th:first-child {
+  background-color: var(--bg-secondary);
+}
+
 /* ============================================================
-   공부 완료 승인 카드 (수동 회독 인정용)
+   공부 완료 승인 카드 & 3단계 기억 체감도 피드백
    ============================================================ */
 .study-completion-card {
   margin-top: 50px;
@@ -792,4 +819,432 @@ body.theme-sepia .notion-color-red { color: #b91c1c; }
   border-radius: 16px;
   border: 1px solid var(--border-color);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+}
+
+.feedback-buttons-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn-feedback {
+  padding: 12px 20px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+  min-height: 48px;
+}
+
+.btn-feedback:active {
+  transform: scale(0.96);
+}
+
+.btn-feedback-easy {
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #10b981;
+}
+
+.btn-feedback-easy:hover {
+  background-color: rgba(16, 185, 129, 0.15);
+  border-color: #10b981;
+}
+
+.btn-feedback-good {
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+}
+
+.btn-feedback-good:hover {
+  background-color: rgba(56, 189, 248, 0.15);
+  border-color: #38bdf8;
+}
+
+.btn-feedback-hard {
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+}
+
+.btn-feedback-hard:hover {
+  background-color: rgba(239, 68, 68, 0.15);
+  border-color: #ef4444;
+}
+
+/* ============================================================
+   8.4인치 태블릿 알도큐브 내추럴 썸 존 플로팅 아일랜드 독
+   ============================================================ */
+.zen-floating-dock {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(120%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 9999px;
+  background: var(--dock-bg);
+  box-shadow: var(--dock-shadow);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-color);
+  z-index: 600;
+  opacity: 0;
+  transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1), opacity 240ms ease;
+  user-select: none;
+}
+
+.zen-floating-dock.visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+.dock-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 9999px;
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 600;
+  transition: background-color 0.15s ease, transform 0.15s ease;
+  min-height: 44px;
+}
+
+.dock-btn:active {
+  transform: scale(0.95);
+}
+
+.dock-btn-subtle:hover {
+  background-color: var(--bg-card-hover);
+}
+
+.dock-btn-accent {
+  background-color: var(--accent);
+  color: #0c0f17;
+  font-weight: 700;
+  box-shadow: 0 2px 10px rgba(56, 189, 248, 0.35);
+}
+
+.dock-btn-accent:hover {
+  background-color: var(--accent-hover);
+}
+
+.dock-separator {
+  width: 1px;
+  height: 20px;
+  background-color: var(--border-color);
+}
+
+.dock-timer-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.dock-mono {
+  font-family: var(--font-family-mono);
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* ============================================================
+   Bento Grid & Clinical-SM2 학습 대시보드 스타일
+   ============================================================ */
+.dash-summary-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  background: linear-gradient(135deg, rgba(20, 25, 35, 0.9) 0%, rgba(12, 15, 23, 0.95) 100%);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.streak-badge {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.summary-pills {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pill-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 8px 14px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 90px;
+}
+
+.pill-item .label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.pill-item .val {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.pill-item .val.highlight {
+  color: var(--accent);
+}
+
+.dash-responsive-layout {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 960px) {
+  .dash-responsive-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+.dash-panel {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 20px;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 16px;
+}
+
+.panel-header .title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.panel-header .subtitle {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-left: 6px;
+}
+
+.queue-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  margin-bottom: 10px;
+  gap: 12px;
+}
+
+.queue-card-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.queue-idx {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--accent);
+  min-width: 22px;
+}
+
+.queue-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+}
+
+.queue-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.queue-card-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge-urgent-critical {
+  font-size: 0.72rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.badge-urgent-due {
+  font-size: 0.72rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--warning);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.badge-urgent-new {
+  font-size: 0.72rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(56, 189, 248, 0.15);
+  color: var(--accent);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.badge-urgent-stable {
+  font-size: 0.72rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--success);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.category-item {
+  margin-bottom: 14px;
+}
+
+.category-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.84rem;
+  margin-bottom: 6px;
+}
+
+.weak-badge {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--warning);
+  margin-left: 6px;
+  font-weight: 600;
+}
+
+.stacked-progress-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+  background-color: var(--bg-secondary);
+}
+
+.bar-segment.seg-l3 { background-color: #10b981; }
+.bar-segment.seg-l2 { background-color: #38bdf8; }
+.bar-segment.seg-l1 { background-color: #f59e0b; }
+.bar-segment.seg-l0 { background-color: #334155; }
+
+.mastery-legend {
+  display: flex;
+  gap: 14px;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin-top: 14px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.legend-dot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot-box {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.recent-logs-box {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.recent-log-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.84rem;
+}
+
+.recent-log-row:last-child {
+  border-bottom: none;
+}
+
+.recent-log-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.recent-log-main .log-title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
+}
+
+.recent-log-main .log-meta {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+/* 태블릿 터치 타겟 최소 규격 (44~48px 보장) */
+.touch-target {
+  min-height: 42px;
+  padding: 8px 14px !important;
+  font-size: 0.85rem !important;
 }
