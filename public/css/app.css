@@ -289,6 +289,7 @@ body {
   border-radius: 4px;
   color: var(--accent);
   font-size: 0.75rem;
+  white-space: nowrap;
 }
 
 .doc-review-badge {
@@ -779,11 +780,14 @@ body.theme-sepia .notion-color-red { color: #b91c1c; }
 .card-status-badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
-  padding: 2px 7px;
+  padding: 2px 8px;
   border-radius: 10px;
   font-size: 0.72rem;
   font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .badge-status-완료 {

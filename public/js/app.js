@@ -397,8 +397,8 @@ const App = {
 
       html += `
         <div class="doc-card" onclick="Reader.open('${doc.id}')">
-          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 8px;">
-            <div class="doc-card-title" style="margin-bottom: 0;">${this.escapeHtml(doc.title)}</div>
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px;">
+            <div class="doc-card-title" style="margin-bottom: 0; flex: 1; min-width: 0;">${this.escapeHtml(doc.title)}</div>
             <span class="card-status-badge ${statusBadgeClass}">${this.escapeHtml(s)}</span>
           </div>
           <div class="doc-card-meta">
