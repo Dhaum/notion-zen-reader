@@ -205,7 +205,7 @@ async function getNotionDocuments(forceRefresh = false) {
 
       // 태그 / 다중 선택 속성 추출
       let tags = [];
-      let category = "지식";
+      let category = "";
       for (const key of Object.keys(props)) {
         if (props[key].type === 'multi_select') {
           tags = props[key].multi_select.map(item => item.name);
@@ -213,6 +213,15 @@ async function getNotionDocuments(forceRefresh = false) {
           category = props[key].select.name;
         }
       }
+
+      // 별도 단일 select 카테고리 컬럼이 없을 경우, 태그에서 주 임상 분과(소화기, 신경정신, 영양건기 등)를 카테고리로 채택
+      if (!category && tags.length > 0) {
+        const specialty = tags.find(t => !['약물', '주의부작용', 'DDI', '사용법', '미용', '만성'].includes(t))
+                       || tags.find(t => t !== '약물')
+                       || tags[0];
+        if (specialty) category = specialty;
+      }
+      if (!category) category = "임상약학";
 
       return {
         id: page.id,

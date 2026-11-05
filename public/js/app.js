@@ -402,10 +402,9 @@ const App = {
             <span class="card-status-badge ${statusBadgeClass}">${this.escapeHtml(s)}</span>
           </div>
           <div class="doc-card-meta">
-            ${createdDate ? `<span style="color: var(--text-muted); font-size: 0.75rem;">📅 ${createdDate} 생성</span>` : ''}
-            <span class="doc-tag">${this.escapeHtml(doc.category || '지식')}</span>
-            ${(doc.tags || []).slice(0, 3).map(t => `<span class="doc-tag">#${this.escapeHtml(t)}</span>`).join(' ')}
-            ${(doc.tags || []).length > 3 ? `<span style="font-size: 0.7rem; color: var(--text-muted);">+${doc.tags.length - 3}</span>` : ''}
+            ${createdDate ? `<span style="color: var(--text-muted); font-size: 0.75rem;">📅 ${createdDate}</span>` : ''}
+            ${(doc.tags || []).slice(0, 4).map(t => `<span class="doc-tag">#${this.escapeHtml(t)}</span>`).join(' ')}
+            ${(doc.tags || []).length > 4 ? `<span style="font-size: 0.7rem; color: var(--text-muted);">+${doc.tags.length - 4}</span>` : ''}
             <span style="margin-left: auto;">${reviewBadge}</span>
           </div>
         </div>

@@ -136,9 +136,9 @@ const Reader = {
         </div>
         <h1 class="reader-title">${this.escapeHtml(doc.title)}</h1>
         <div class="reader-meta-bar">
-          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <span class="doc-tag">${doc.category || '임상약학'}</span>
-            <span style="font-size: 0.8rem; color: var(--text-muted);">최근 복습: <strong>${lastDate}</strong></span>
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            ${(doc.tags || []).map(t => `<span class="doc-tag">#${this.escapeHtml(t)}</span>`).join(' ')}
+            <span style="font-size: 0.8rem; color: var(--text-muted); margin-left: 6px;">최근 복습: <strong>${lastDate}</strong></span>
           </div>
           <div id="reader-review-badge" class="doc-review-badge">
             🏆 누적 ${doc.reviewCount || 0}회독
