@@ -5,33 +5,8 @@ const path = require('path');
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 const LOG_FILE = path.join(DATA_DIR, 'study-logs.json');
 
-// 기본 목(Mock) 학습 로그 (초기 기동 시 시각적 확인용)
-const DEFAULT_LOGS = [
-  {
-    id: "log-1",
-    docId: "mock-doc-001",
-    docTitle: "신경계 약리학: 도파민 및 세로토닌 경로와 수용체 작용기전",
-    readAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-    durationSeconds: 195,
-    device: "iplay60-tablet"
-  },
-  {
-    id: "log-2",
-    docId: "mock-doc-001",
-    docTitle: "신경계 약리학: 도파민 및 세로토닌 경로와 수용체 작용기전",
-    readAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-    durationSeconds: 240,
-    device: "iplay60-tablet"
-  },
-  {
-    id: "log-3",
-    docId: "mock-doc-002",
-    docTitle: "컴퓨터 시스템 아키텍처: 가상 메모리와 페이징(Paging) 기법",
-    readAt: new Date().toISOString(),
-    durationSeconds: 310,
-    device: "iplay60-tablet"
-  }
-];
+// 초기 학습 로그 (빈 배열로 시작)
+const DEFAULT_LOGS = [];
 
 // 메모리 캐시 (서버리스 람다 환경 대응)
 let inMemoryLogs = null;

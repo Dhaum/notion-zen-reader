@@ -11,6 +11,9 @@ const App = {
     this.initSecurity();
     this.initTheme();
     this.initPWA();
+    if (typeof ZenStorage !== 'undefined') {
+      ZenStorage.init().catch(console.warn);
+    }
     OfflineManager.init();
     this.loadDocuments();
   },
@@ -184,6 +187,24 @@ const App = {
       }
 
       this.documents = data.documents;
+
+      // 로컬 IndexedDB에 저장된 회독수와 최신 복습일자 결합
+      if (typeof ZenStorage !== 'undefined') {
+        try {
+          const statsMap = await ZenStorage.getDocStatsMap();
+          for (const doc of this.documents) {
+            if (statsMap[doc.id]) {
+              doc.reviewCount = Math.max(doc.reviewCount || 0, statsMap[doc.id].reviewCount);
+              if (statsMap[doc.id].lastReviewedAt) {
+                doc.lastReviewedAt = statsMap[doc.id].lastReviewedAt;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[App] 로컬 통계 융합 실패:', e);
+        }
+      }
+
       this.updateStatusPillCounts();
       this.applyFilterAndSort();
       if (forceRefresh) {

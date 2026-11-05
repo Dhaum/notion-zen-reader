@@ -5,6 +5,16 @@ const Dashboard = {
     container.innerHTML = '<div style="text-align: center; padding: 60px 0; color: var(--text-muted);">학습 통계를 불러오는 중입니다...</div>';
 
     try {
+      // 1. 태블릿 영구 스토리지(IndexedDB) 우선 집계 (0초 딜레이, 영구 보존 잔디)
+      if (typeof ZenStorage !== 'undefined') {
+        const localStats = await ZenStorage.calculateStats();
+        if (localStats && (localStats.summary.totalReviews > 0 || !navigator.onLine)) {
+          this.render(localStats, false);
+          return;
+        }
+      }
+
+      // 2. 로컬 기록이 아직 0건일 때 서버 통계 시도
       const response = await fetch('/api/study-stats', {
         headers: {
           'x-zen-pin': localStorage.getItem('zen_pin_code') || ''
@@ -17,17 +27,21 @@ const Dashboard = {
         throw new Error("인증 실패: 올바른 PIN 번호가 필요합니다.");
       }
       const data = await response.json();
-      if (!data.success || !data.stats) {
-        throw new Error(data.error || "통계 데이터를 불러올 수 없습니다.");
+      if (data.success && data.stats) {
+        this.render(data.stats);
+        return;
       }
 
-      this.render(data.stats);
+      // 3. 서버 응답이 없으면 빈 로컬 통계 렌더링
+      if (typeof ZenStorage !== 'undefined') {
+        const localStats = await ZenStorage.calculateStats();
+        this.render(localStats, false);
+      }
     } catch (err) {
-      console.warn('[Dashboard] 서버 통계 로딩 실패, 로컬 영구 저장소(IndexedDB/localStorage)에서 복원 시도:', err);
-      // 로컬 영구 저장소 기반 오프라인 대시보드 폴백 생성
-      const offlineStats = await this.buildOfflineStats();
-      if (offlineStats) {
-        this.render(offlineStats, true);
+      console.warn('[Dashboard] 통계 로딩 처리 중 오류, 로컬 스토리지로 렌더링:', err);
+      if (typeof ZenStorage !== 'undefined') {
+        const localStats = await ZenStorage.calculateStats();
+        this.render(localStats, false);
         return;
       }
 
@@ -237,9 +251,47 @@ const Dashboard = {
     html += `
         </div>
       </div>
+
+      <!-- 5. 태블릿 데이터 백업 및 복원 (영구 보존 세이프티 넷) -->
+      <div style="margin-top: 24px; padding: 16px 20px; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <div style="font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+            <span>🛡️ 태블릿 로컬 데이터 관리</span>
+            <span style="font-size: 0.75rem; background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; color: var(--success); font-weight: normal;">IndexedDB 영구 보존 활성화</span>
+          </div>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
+            기기 변경이나 백업이 필요할 때 JSON 파일로 안전하게 보관하세요.
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn" style="font-size: 0.82rem; padding: 6px 14px;" onclick="ZenStorage.exportBackupJSON()">
+            📦 백업 다운로드
+          </button>
+          <label class="btn" style="font-size: 0.82rem; padding: 6px 14px; cursor: pointer; margin-bottom: 0;">
+            📥 백업 복원
+            <input type="file" accept=".json" style="display: none;" onchange="Dashboard.handleImportBackup(this)">
+          </label>
+        </div>
+      </div>
     `;
 
     container.innerHTML = html;
+  },
+
+  async handleImportBackup(input) {
+    if (!input.files || input.files.length === 0) return;
+    const file = input.files[0];
+    try {
+      const count = await ZenStorage.importBackupJSON(file);
+      App.showToast(`✨ ${count}건의 학습 기록이 성공적으로 복원되었습니다!`);
+      this.load();
+      if (typeof App !== 'undefined' && App.loadDocuments) {
+        App.loadDocuments();
+      }
+    } catch (err) {
+      alert('백업 파일 복원 실패: ' + err.message);
+    }
+    input.value = '';
   },
 
   escapeHtml(str) {

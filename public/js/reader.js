@@ -39,6 +39,20 @@ const Reader = {
       }
 
       this.currentDoc = data.document;
+
+      // 로컬 IndexedDB의 회독수와 최신 복습일 반영 (서버리스 콜드스타트 무력화)
+      if (typeof ZenStorage !== 'undefined') {
+        try {
+          const statsMap = await ZenStorage.getDocStatsMap();
+          if (statsMap[docId]) {
+            this.currentDoc.reviewCount = statsMap[docId].reviewCount;
+            this.currentDoc.lastReviewedAt = statsMap[docId].lastReviewedAt;
+          }
+        } catch (e) {
+          console.warn('[Reader] 로컬 통계 맵 조회 실패:', e);
+        }
+      }
+
       this.render(this.currentDoc);
       this.setupScrollObserver();
       window.scrollTo(0, 0);
@@ -263,7 +277,17 @@ const Reader = {
       device: "alldocube-iplay60"
     };
 
-    const res = await OfflineManager.sendStudyLog(payload);
+    // 1. 태블릿 로컬 IndexedDB에 최우선 영구 저장 (오프라인 100% 보장)
+    if (typeof ZenStorage !== 'undefined') {
+      try {
+        await ZenStorage.saveLog(payload);
+      } catch (err) {
+        console.warn('[Reader] IndexedDB 저장 실패:', err);
+      }
+    }
+
+    // 2. 오프라인 큐 및 서버 전송 (실패해도 로컬 저장은 완료됨)
+    OfflineManager.sendStudyLog(payload).catch(() => {});
 
     // 화면 UI 업데이트
     const badge = document.getElementById('reader-review-badge');
