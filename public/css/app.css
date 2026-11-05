@@ -306,6 +306,7 @@ body {
 /* 리더 모드 (본문 뷰어) */
 .reader-container {
   padding-top: 10px;
+  padding-bottom: 96px;
 }
 
 .reader-header {
@@ -970,22 +971,28 @@ body.theme-sepia .notion-color-red { color: #b91c1c; }
    ============================================================ */
 .zen-floating-dock {
   position: fixed;
-  bottom: 24px;
+  bottom: 16px;
   left: 50%;
   transform: translateX(-50%) translateY(120%);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  gap: 6px;
+  padding: 4px 10px;
+  height: 42px;
+  box-sizing: border-box;
+  max-width: calc(100vw - 24px);
   border-radius: 9999px;
   background: var(--dock-bg);
-  box-shadow: var(--dock-shadow);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--border-color);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border-color);
   z-index: 600;
   opacity: 0;
-  transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1), opacity 240ms ease;
+  transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1), opacity 200ms ease;
   user-select: none;
 }
 
@@ -998,16 +1005,32 @@ body.theme-sepia .notion-color-red { color: #b91c1c; }
   background: transparent;
   border: none;
   color: var(--text-primary);
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
+  justify-content: center;
+  flex-shrink: 0;
+  white-space: nowrap;
+  word-break: keep-all;
+  gap: 4px;
+  padding: 4px 10px;
   border-radius: 9999px;
   cursor: pointer;
-  font-size: 0.86rem;
+  font-size: 0.8rem;
   font-weight: 600;
+  line-height: 1;
+  height: 32px;
   transition: background-color 0.15s ease, transform 0.15s ease;
-  min-height: 44px;
+}
+
+.dock-label {
+  white-space: nowrap;
+  word-break: keep-all;
+  display: inline-block;
+}
+
+.dock-icon {
+  font-size: 0.85rem;
+  line-height: 1;
 }
 
 .dock-btn:active {
@@ -1022,7 +1045,8 @@ body.theme-sepia .notion-color-red { color: #b91c1c; }
   background-color: var(--accent);
   color: #0c0f17;
   font-weight: 700;
-  box-shadow: 0 2px 10px rgba(56, 189, 248, 0.35);
+  padding: 4px 12px;
+  box-shadow: 0 2px 8px rgba(56, 189, 248, 0.3);
 }
 
 .dock-btn-accent:hover {
@@ -1031,16 +1055,19 @@ body.theme-sepia .notion-color-red { color: #b91c1c; }
 
 .dock-separator {
   width: 1px;
-  height: 20px;
+  height: 16px;
   background-color: var(--border-color);
+  flex-shrink: 0;
 }
 
 .dock-timer-badge {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  font-size: 0.85rem;
+  flex-shrink: 0;
+  white-space: nowrap;
+  gap: 4px;
+  padding: 2px 6px;
+  font-size: 0.78rem;
   color: var(--text-muted);
 }
 

@@ -113,7 +113,7 @@ const Reader = {
 
     const label = document.getElementById('dock-toggle-label');
     const icon = document.getElementById('dock-toggle-icon');
-    if (label) label.innerText = this.isAllTogglesExpanded ? '토글 접기' : '토글 전체 펴기';
+    if (label) label.innerText = this.isAllTogglesExpanded ? '접기' : '토글';
     if (icon) icon.innerText = this.isAllTogglesExpanded ? '🙈' : '👁️';
 
     App.showToast(this.isAllTogglesExpanded ? '👁️ 모든 셀프테스트 토글을 열었습니다.' : '🙈 모든 셀프테스트 토글을 닫았습니다.');
@@ -466,7 +466,7 @@ const Reader = {
 
     const dockCheckinBtn = document.getElementById('dock-checkin-btn');
     if (dockCheckinBtn) {
-      dockCheckinBtn.innerHTML = `<span>✅</span><span>완료됨</span>`;
+      dockCheckinBtn.innerHTML = `<span>✅</span><span class="dock-label">완료</span>`;
       dockCheckinBtn.disabled = true;
       dockCheckinBtn.style.opacity = '0.7';
     }
