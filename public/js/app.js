@@ -259,13 +259,16 @@ const App = {
 
   // 헤더 새로고침 통합 분기 핸들러 (서재/대시보드 -> 메타데이터 동기화, 리더 뷰 -> 단일 문서 실시간 핀포인트 갱신)
   handleHeaderRefresh() {
-    if (this.currentView === 'reader') {
-      if (typeof Reader !== 'undefined' && Reader.refreshCurrentDoc) {
+    const readerView = document.getElementById('view-reader');
+    const isReaderActive = (this.currentView === 'reader') || (readerView && readerView.style.display !== 'none');
+
+    if (isReaderActive) {
+      if (typeof Reader !== 'undefined' && Reader.refreshCurrentDoc && Reader.currentDoc) {
         Reader.refreshCurrentDoc();
+        return;
       }
-    } else {
-      this.loadDocuments(true);
     }
+    this.loadDocuments(true);
   },
 
   // 4. 노션 문서 목록 로딩 (새 글 반영용 forceRefresh 옵션 및 수정 변경 감지)

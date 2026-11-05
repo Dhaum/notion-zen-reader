@@ -49,6 +49,26 @@ const mockReader = {
 mockReader.refreshSingleDoc();
 console.log('  ✅ [PASS] 리더 뷰 실시간 갱신 중 독서 타이머(durationSeconds) 연속 보존');
 
+// 4. 리더 뷰 실시간 갱신 팝업 실제 작동 1:1 일치 검증
+function getRefreshFeedbackMessage(cachedTime, newNotionTime, docTitle) {
+  const shortTitle = docTitle.length > 18 ? docTitle.slice(0, 18) + '...' : docTitle;
+  const isModified = cachedTime && newNotionTime && new Date(newNotionTime).getTime() > new Date(cachedTime).getTime();
+  if (isModified) {
+    return `✨ [${shortTitle}] 노션 최신 수정본으로 실시간 갱신되었습니다!`;
+  }
+  return `✅ [${shortTitle}] 이미 최신 상태입니다. (노션에 추가 변경사항 없음)`;
+}
+
+// 4-A. 노션에 수정사항이 없는 경우 -> "이미 최신 상태" 팝업
+const msgNoChange = getRefreshFeedbackMessage('2026-11-06T03:00:00Z', '2026-11-06T03:00:00Z', '단트롤렌 경구제 실무 가이드');
+assert.strictEqual(msgNoChange.includes('이미 최신 상태'), true, '무변경 시 최신 상태 팝업 검증 실패');
+console.log('  ✅ [PASS] 변경사항 없을 때 정확한 안내: "이미 최신 상태입니다. (노션에 추가 변경사항 없음)"');
+
+// 4-B. 노션에 실제 수정이 있는 경우 -> "최신 수정본으로 갱신" 팝업
+const msgChanged = getRefreshFeedbackMessage('2026-11-06T02:00:00Z', '2026-11-06T03:00:00Z', '단트롤렌 경구제 실무 가이드');
+assert.strictEqual(msgChanged.includes('최신 수정본으로 실시간 갱신'), true, '수정 감지 시 갱신 팝업 검증 실패');
+console.log('  ✅ [PASS] 실제 수정 감지 시 정확한 안내: "노션 최신 수정본으로 실시간 갱신되었습니다!"');
+
 console.log('====================================================');
 console.log('🎉 모든 스마트 변경 감지 & 1:1 핀포인트 갱신 로직 검증 100% 완료!');
 console.log('====================================================');

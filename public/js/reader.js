@@ -139,13 +139,14 @@ const Reader = {
 
     const docId = this.currentDoc.id;
     const docTitle = this.currentDoc.title || '문서';
+    const shortTitle = docTitle.length > 18 ? docTitle.slice(0, 18) + '...' : docTitle;
     const refreshBtn = document.getElementById('btn-reader-pinpoint-refresh');
     const headerRefreshBtn = document.getElementById('header-refresh-btn');
 
     if (refreshBtn) refreshBtn.classList.add('spinning');
     if (headerRefreshBtn) headerRefreshBtn.classList.add('spinning');
     if (typeof App !== 'undefined') {
-      App.showToast(`🔄 [${docTitle}] 노션 실시간 최신 내용 조회 중...`);
+      App.showToast(`🔄 [${shortTitle}] 노션 최신 내용 대조 중...`);
     }
 
     try {
@@ -168,6 +169,15 @@ const Reader = {
       // 회독수 및 복습일자 보존
       const prevReviewCount = this.currentDoc.reviewCount;
       const prevLastReviewedAt = this.currentDoc.lastReviewedAt;
+      const prevUpdatedAt = this.currentDoc.updatedAt;
+
+      // 실제 노션에서 수정 여부 정밀 대조 (팝업과 실제 작동 100% 일치)
+      const syncMap = (typeof App !== 'undefined' && App.getDocSyncMap) ? App.getDocSyncMap() : {};
+      const localCachedTime = syncMap[docId]?.cachedUpdatedAt || prevUpdatedAt;
+      let isModifiedInNotion = false;
+      if (localCachedTime && data.document.updatedAt) {
+        isModifiedInNotion = new Date(data.document.updatedAt).getTime() > new Date(localCachedTime).getTime();
+      }
 
       this.currentDoc = data.document;
       this.currentDoc.reviewCount = Math.max(this.currentDoc.reviewCount || 0, prevReviewCount || 0);
@@ -192,7 +202,13 @@ const Reader = {
           const cachedDoc = App.documents.find(d => d.id === docId);
           if (cachedDoc) cachedDoc.hasUpdate = false;
         }
-        App.showToast(`✨ [${docTitle}] 노션 최신 내용이 실시간 반영되었습니다!`);
+
+        // 실제 작동 상태에 따른 1:1 정밀 팝업 (혼선 원천 방지)
+        if (isModifiedInNotion) {
+          App.showToast(`✨ [${shortTitle}] 노션 최신 수정본으로 실시간 갱신되었습니다!`);
+        } else {
+          App.showToast(`✅ [${shortTitle}] 이미 최신 상태입니다. (노션에 추가 변경사항 없음)`);
+        }
       }
     } catch (err) {
       console.error('[Reader] 실시간 동기화 오류:', err);
