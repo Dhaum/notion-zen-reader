@@ -6,6 +6,7 @@ const App = {
   selectedStatus: 'all',     // 'all' | '완료' | '진행 중' | '시작 전'
   sortOrder: 'created_desc',  // 'created_desc' | 'created_asc' | 'updated_desc' | 'title_asc'
   searchQuery: '',
+  deferredInstallPrompt: null,
 
   init() {
     this.initSecurity();
@@ -154,7 +155,7 @@ const App = {
     }
   },
 
-  // 3. PWA 서비스워커 등록
+  // 3. PWA 서비스워커 등록 및 설치 프롬프트 제어
   initPWA() {
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
@@ -162,6 +163,55 @@ const App = {
           .then((reg) => console.log('[PWA] 서비스워커 등록 성공:', reg.scope))
           .catch((err) => console.warn('[PWA] 서비스워커 등록 실패:', err));
       });
+    }
+
+    // 안드로이드 / 크롬 네이티브 설치 이벤트 캡처
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      this.deferredInstallPrompt = e;
+      const installBtn = document.getElementById('btn-install-pwa');
+      if (installBtn) {
+        installBtn.style.display = 'inline-flex';
+      }
+      console.log('[PWA] beforeinstallprompt 감지: 원터치 설치 버튼 활성화');
+    });
+
+    // PWA 설치 완료 감지
+    window.addEventListener('appinstalled', () => {
+      this.deferredInstallPrompt = null;
+      const installBtn = document.getElementById('btn-install-pwa');
+      if (installBtn) installBtn.style.display = 'none';
+      this.showToast('🎉 지식 서재 웹앱이 태블릿에 성공적으로 설치되었습니다!');
+      console.log('[PWA] 웹앱 설치 완료');
+    });
+
+    // 이미 독립 창(standalone)으로 실행 중인지 확인
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if (isStandalone) {
+      const installBtn = document.getElementById('btn-install-pwa');
+      if (installBtn) installBtn.style.display = 'none';
+    }
+  },
+
+  async installPWA() {
+    if (this.deferredInstallPrompt) {
+      this.deferredInstallPrompt.prompt();
+      const { outcome } = await this.deferredInstallPrompt.userChoice;
+      console.log('[PWA] 설치 다이얼로그 결과:', outcome);
+      if (outcome === 'accepted') {
+        this.showToast('📲 앱 설치를 시작합니다...');
+      }
+      this.deferredInstallPrompt = null;
+      const installBtn = document.getElementById('btn-install-pwa');
+      if (installBtn) installBtn.style.display = 'none';
+    } else {
+      // iOS 사파리 또는 브라우저 수동 안내
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      if (isIOS) {
+        alert('📱 아이패드 웹앱 설치 방법:\n상단 브라우저의 [공유 아이콘(네모 위 화살표)]을 누른 후, 아래 메뉴에서 [홈 화면에 추가]를 선택해주세요.');
+      } else {
+        alert('📱 태블릿 웹앱 설치 방법:\n브라우저 우측 상단 더보기 [⋮] 메뉴를 누른 후, [앱 설치] 또는 [홈 화면에 추가]를 선택해주세요.');
+      }
     }
   },
 

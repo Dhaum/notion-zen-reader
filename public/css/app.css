@@ -153,6 +153,12 @@ body {
   padding: 6px 10px;
 }
 
+#btn-install-pwa {
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+}
+
 .badge-status {
   font-size: 0.75rem;
   padding: 3px 8px;

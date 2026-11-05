@@ -129,6 +129,7 @@ const ZenStorage = {
       timestamp: entry.timestamp || nowIso,
       durationSeconds: Number(entry.durationSeconds) || 60,
       reviewCount: Number(entry.reviewCount) || 1,
+      feedback: entry.feedback || 'good', // 'easy' | 'good' | 'hard'
       device: entry.device || 'alldocube-iplay60'
     };
 
@@ -200,6 +201,173 @@ const ZenStorage = {
     });
 
     return map;
+  },
+
+  // 4-2. Clinical-SM2 회독 주기 산출 엔진 (임상 약학 롱폼 최적화)
+  calculateSM2(historyLogs = []) {
+    if (!historyLogs || historyLogs.length === 0) {
+      return { reviewCount: 0, intervalDays: 1, easeFactor: 2.2, lastReviewedAt: null, dueDate: null };
+    }
+
+    let interval = 1;
+    let ef = 2.2;
+    const count = historyLogs.length;
+
+    for (let i = 0; i < count; i++) {
+      const feedback = historyLogs[i].feedback || 'good';
+      if (feedback === 'hard') {
+        interval = 1;
+        ef = Math.max(1.3, ef - 0.2);
+      } else {
+        if (i === 0) interval = 1;
+        else if (i === 1) interval = 3;
+        else if (i === 2) interval = 7;
+        else if (i === 3) interval = 14;
+        else interval = Math.round(interval * ef);
+
+        if (feedback === 'easy') {
+          ef = Math.min(2.5, ef + 0.1);
+        }
+      }
+    }
+
+    const lastLog = historyLogs[historyLogs.length - 1];
+    const lastDate = new Date(lastLog.readAt || lastLog.timestamp);
+    const dueDate = new Date(lastDate.getTime() + interval * 24 * 60 * 60 * 1000);
+
+    return {
+      reviewCount: count,
+      intervalDays: interval,
+      easeFactor: Number(ef.toFixed(2)),
+      lastReviewedAt: lastDate.toISOString(),
+      dueDate: dueDate.toISOString()
+    };
+  },
+
+  // 4-3. 140개 전체 문서 대상 통합 학습 통계 & 골든타임 큐 산출
+  async calculateAdvancedStats(allDocuments = []) {
+    const logs = await this.getAllLogs();
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+
+    // 1) 문서별 로그 그룹화 및 히트맵 초기화
+    const docLogsMap = {};
+    const heatmap = {};
+    let todayReviews = 0;
+    let totalDurationSeconds = 0;
+
+    for (let i = 89; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      heatmap[d.toISOString().slice(0, 10)] = 0;
+    }
+
+    logs.forEach(log => {
+      const dateStr = (log.readAt || log.timestamp || '').slice(0, 10);
+      if (dateStr === todayStr) todayReviews++;
+      if (heatmap[dateStr] !== undefined) heatmap[dateStr]++;
+      totalDurationSeconds += (Number(log.durationSeconds) || 0);
+
+      if (!log.docId) return;
+      if (!docLogsMap[log.docId]) docLogsMap[log.docId] = [];
+      docLogsMap[log.docId].push(log);
+    });
+
+    // 로그 과거순 정렬 (SM-2 시뮬레이션용)
+    Object.keys(docLogsMap).forEach(id => {
+      docLogsMap[id].sort((a, b) => new Date(a.readAt || a.timestamp) - new Date(b.readAt || b.timestamp));
+    });
+
+    // 2) 스트릭(연속 학습일) 계산
+    let currentStreak = 0;
+    let checkDate = new Date(now);
+    while (true) {
+      const key = checkDate.toISOString().slice(0, 10);
+      if ((heatmap[key] || 0) > 0) {
+        currentStreak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        if (key === todayStr) {
+          checkDate.setDate(checkDate.getDate() - 1);
+          continue;
+        }
+        break;
+      }
+    }
+
+    // 3) 전체 문서 대상 SM-2 결합 & 긴급도(Urgency Score) 산출
+    const enrichedDocs = allDocuments.map(doc => {
+      const history = docLogsMap[doc.id] || [];
+      const sm2 = this.calculateSM2(history);
+      const diffDays = sm2.lastReviewedAt 
+        ? Math.floor((now - new Date(sm2.lastReviewedAt)) / (24 * 60 * 60 * 1000)) 
+        : 999;
+
+      let urgencyScore = 0;
+      let urgencyBadge = 'STABLE';
+
+      if (sm2.reviewCount === 0) {
+        urgencyScore = 1.2;
+        urgencyBadge = 'NEW';
+      } else {
+        urgencyScore = Number((diffDays / sm2.intervalDays).toFixed(2));
+        if (urgencyScore >= 1.5) urgencyBadge = 'CRITICAL';
+        else if (urgencyScore >= 1.0) urgencyBadge = 'DUE';
+        else if (urgencyScore >= 0.7) urgencyBadge = 'APPROACHING';
+      }
+
+      return {
+        ...doc,
+        reviewCount: sm2.reviewCount,
+        intervalDays: sm2.intervalDays,
+        easeFactor: sm2.easeFactor,
+        lastReviewedAt: sm2.lastReviewedAt,
+        diffDays,
+        urgencyScore,
+        urgencyBadge
+      };
+    });
+
+    // 4) 오늘의 골든타임 복습 Top 5 큐 추출
+    const goldenQueue = enrichedDocs
+      .filter(d => d.urgencyBadge === 'CRITICAL' || d.urgencyBadge === 'DUE' || d.urgencyBadge === 'NEW')
+      .sort((a, b) => {
+        // 긴급(CRITICAL) > 도래(DUE) > 신규(NEW) 우선순위 정렬
+        const priorityOrder = { 'CRITICAL': 3, 'DUE': 2, 'NEW': 1, 'APPROACHING': 0, 'STABLE': 0 };
+        const diffP = (priorityOrder[b.urgencyBadge] || 0) - (priorityOrder[a.urgencyBadge] || 0);
+        if (diffP !== 0) return diffP;
+        return b.urgencyScore - a.urgencyScore;
+      })
+      .slice(0, 5);
+
+    // 5) 카테고리별 마스터리(숙련도) 집계
+    const categoryStats = {};
+    enrichedDocs.forEach(d => {
+      const cat = d.category || '기타 지식';
+      if (!categoryStats[cat]) {
+        categoryStats[cat] = { total: 0, level0: 0, level1: 0, level2: 0, level3: 0 };
+      }
+      categoryStats[cat].total++;
+      if (d.reviewCount === 0) categoryStats[cat].level0++;
+      else if (d.reviewCount <= 2) categoryStats[cat].level1++;
+      else if (d.reviewCount <= 4) categoryStats[cat].level2++;
+      else categoryStats[cat].level3++;
+    });
+
+    return {
+      summary: {
+        totalDocuments: allDocuments.length || enrichedDocs.length,
+        studiedDocsCount: Object.keys(docLogsMap).length,
+        coverageRate: allDocuments.length ? Math.round((Object.keys(docLogsMap).length / allDocuments.length) * 100) : 0,
+        todayReviews,
+        totalReviews: logs.length,
+        totalStudyMinutes: Math.round(totalDurationSeconds / 60),
+        currentStreak
+      },
+      heatmap,
+      goldenQueue,
+      categoryStats,
+      recentLogs: logs.slice(0, 15)
+    };
   },
 
   // 5. 대시보드 통계 및 90일 복습 잔디 히트맵 산출 (클라이언트 사이드 고속 연산)

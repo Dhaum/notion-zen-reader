@@ -1,5 +1,5 @@
 // public/sw.js - PWA 오프라인 캐싱, 영구 이미지 보존 및 백그라운드 동기화 서비스 워커
-const CACHE_NAME = 'zen-reader-v2';
+const CACHE_NAME = 'zen-reader-v3';
 const IMAGE_CACHE_NAME = 'zen-images-v1';
 
 const STATIC_ASSETS = [
@@ -12,7 +12,12 @@ const STATIC_ASSETS = [
   '/js/dashboard.js',
   '/js/offline.js',
   '/manifest.json',
-  '/icons/icon.svg'
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/icon-maskable-192.png',
+  '/icons/icon-maskable-512.png',
+  '/icons/apple-touch-icon.png',
+  '/icons/favicon.png'
 ];
 
 // 노션 및 AWS S3 이미지 URL 판별

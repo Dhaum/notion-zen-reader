@@ -11,7 +11,10 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
+  <meta name="apple-mobile-web-app-title" content="지식서재">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon.png">
 
   <link rel="stylesheet" href="/css/app.css">
 </head>
@@ -32,6 +35,7 @@
       </div>
     </div>
     <div class="zen-header-right">
+      <button id="btn-install-pwa" class="btn btn-icon" onclick="App.installPWA()" title="태블릿에 앱 설치" style="display: none;">📲</button>
       <button class="btn btn-icon" onclick="App.downloadAllForOffline()" title="전체 문서 오프라인 일괄 다운로드">📦</button>
       <button class="btn btn-icon" onclick="App.cycleFontSize()" title="글자 크기 변경">🔤</button>
       <button class="btn btn-icon" onclick="App.toggleTheme()" title="화면 테마 변경">🌓</button>
