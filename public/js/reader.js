@@ -186,22 +186,97 @@ const Reader = {
   },
 
   renderBlocks(blocks) {
+    if (!blocks || !Array.isArray(blocks) || blocks.length === 0) return '';
     let out = '';
-    for (const b of blocks) {
+    let i = 0;
+
+    while (i < blocks.length) {
+      const b = blocks[i];
       const contentHtml = b.html || this.escapeHtml(b.text || '');
+
+      // 1. 연속된 불렛 리스트 그룹핑 및 하위 블록(children) 재귀 렌더링
+      if (b.type === 'bulleted_list_item') {
+        out += '<ul class="zen-list">';
+        while (i < blocks.length && blocks[i].type === 'bulleted_list_item') {
+          const item = blocks[i];
+          const itemHtml = item.html || this.escapeHtml(item.text || '');
+          out += `<li><div>${itemHtml}</div>`;
+          if (item.children && item.children.length > 0) {
+            out += this.renderBlocks(item.children);
+          }
+          out += `</li>`;
+          i++;
+        }
+        out += '</ul>';
+        continue;
+      }
+
+      // 2. 연속된 번호 매김 리스트 그룹핑 및 하위 블록(children) 재귀 렌더링
+      if (b.type === 'numbered_list_item') {
+        out += '<ol class="zen-numbered-list">';
+        while (i < blocks.length && blocks[i].type === 'numbered_list_item') {
+          const item = blocks[i];
+          const itemHtml = item.html || this.escapeHtml(item.text || '');
+          out += `<li><div>${itemHtml}</div>`;
+          if (item.children && item.children.length > 0) {
+            out += this.renderBlocks(item.children);
+          }
+          out += `</li>`;
+          i++;
+        }
+        out += '</ol>';
+        continue;
+      }
+
+      // 3. 개별 블록 렌더링
       switch (b.type) {
         case 'heading_1':
-          out += `<h1>${contentHtml}</h1>`;
-          break;
         case 'heading_2':
-          out += `<h2>${contentHtml}</h2>`;
-          break;
         case 'heading_3':
-          out += `<h3>${contentHtml}</h3>`;
+          const hTag = b.type === 'heading_1' ? 'h1' : (b.type === 'heading_2' ? 'h2' : 'h3');
+          if (b.isToggleable && b.children && b.children.length > 0) {
+            out += `
+              <details class="zen-toggle zen-heading-toggle">
+                <summary><${hTag} style="display: inline; margin: 0;">${contentHtml}</${hTag}></summary>
+                <div class="zen-toggle-content">
+                  ${this.renderBlocks(b.children)}
+                </div>
+              </details>
+            `;
+          } else {
+            out += `<${hTag}>${contentHtml}</${hTag}>`;
+            if (b.children && b.children.length > 0) {
+              out += this.renderBlocks(b.children);
+            }
+          }
           break;
+
+        case 'code':
+          const codeText = b.code || b.text || '';
+          const langBadge = (b.language && b.language !== 'plain text')
+            ? `<div class="zen-code-lang">${this.escapeHtml(b.language)}</div>`
+            : '';
+          out += `
+            <div class="zen-code-wrapper">
+              ${langBadge}
+              <pre class="zen-code-block"><code>${this.escapeHtml(codeText)}</code></pre>
+            </div>
+          `;
+          break;
+
+        case 'divider':
+          out += `<hr class="zen-divider">`;
+          break;
+
         case 'paragraph':
-          out += `<p>${contentHtml}</p>`;
+          if (contentHtml) {
+            out += `<p>${contentHtml}</p>`;
+          }
+          if (b.children && b.children.length > 0) {
+            out += `<div class="zen-indented-block">${this.renderBlocks(b.children)}</div>`;
+          }
           break;
+
         case 'callout':
           out += `
             <div class="zen-callout">
@@ -213,25 +288,28 @@ const Reader = {
             </div>
           `;
           break;
+
         case 'quote':
           out += `
             <blockquote class="zen-quote">
               <div>${contentHtml}</div>
-              ${b.children ? this.renderBlocks(b.children) : ''}
+              ${b.children && b.children.length > 0 ? this.renderBlocks(b.children) : ''}
             </blockquote>
           `;
           break;
+
         case 'toggle':
           const summaryHtml = b.summaryHtml || this.escapeHtml(b.summary || b.text || '셀프 테스트 (열기/닫기)');
           out += `
             <details class="zen-toggle">
               <summary>${summaryHtml}</summary>
               <div class="zen-toggle-content">
-                ${b.children ? this.renderBlocks(b.children) : `<p>${contentHtml}</p>`}
+                ${b.children && b.children.length > 0 ? this.renderBlocks(b.children) : `<p>${contentHtml}</p>`}
               </div>
             </details>
           `;
           break;
+
         case 'table':
           const rows = b.children || [];
           if (rows.length === 0) {
@@ -255,20 +333,19 @@ const Reader = {
           });
           out += '</tbody></table></div>';
           break;
-        case 'bulleted_list_item':
-          out += `<ul><li>${contentHtml}</li></ul>`;
-          break;
-        case 'numbered_list_item':
-          out += `<ol><li>${contentHtml}</li></ol>`;
-          break;
+
         case 'to_do':
           out += `
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-              <input type="checkbox" ${b.checked ? 'checked' : ''} style="width: 18px; height: 18px; accent-color: var(--accent);">
-              <span>${contentHtml}</span>
+            <div class="zen-todo-item" style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px;">
+              <input type="checkbox" ${b.checked ? 'checked' : ''} style="width: 18px; height: 18px; margin-top: 3px; accent-color: var(--accent);">
+              <div style="flex: 1;">${contentHtml}</div>
             </div>
           `;
+          if (b.children && b.children.length > 0) {
+            out += `<div class="zen-indented-block">${this.renderBlocks(b.children)}</div>`;
+          }
           break;
+
         case 'image':
           if (b.imageUrl) {
             out += `
@@ -278,13 +355,34 @@ const Reader = {
             `;
           }
           break;
+
+        case 'column_list':
+          out += `<div class="zen-columns">${b.children && b.children.length > 0 ? this.renderBlocks(b.children) : ''}</div>`;
+          break;
+
+        case 'column':
+          out += `<div class="zen-column">${b.children && b.children.length > 0 ? this.renderBlocks(b.children) : ''}</div>`;
+          break;
+
+        case 'synced_block':
+          if (b.children && b.children.length > 0) {
+            out += this.renderBlocks(b.children);
+          }
+          break;
+
         default:
-          if (b.text || b.html) {
+          if (contentHtml) {
             out += `<p>${contentHtml}</p>`;
+          }
+          if (b.children && b.children.length > 0) {
+            out += this.renderBlocks(b.children);
           }
           break;
       }
+
+      i++;
     }
+
     return out;
   },
 

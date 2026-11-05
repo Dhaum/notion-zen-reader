@@ -342,8 +342,8 @@ async function fetchBlocksRecursively(blockId) {
 
     for (const block of results) {
       const parsed = simplifyBlock(block);
-      // 토글, 테이블, 콜아웃, 인용구, 중첩 리스트, 컬럼 등 하위 블록을 갖는 타입 재귀 탐색
-      if (block.has_children && (block.type === 'toggle' || block.type === 'table' || block.type === 'callout' || block.type === 'quote' || block.type === 'column_list' || block.type === 'column' || block.type === 'bulleted_list_item' || block.type === 'numbered_list_item')) {
+      // 토글, 테이블, 콜아웃, 인용구, 중첩 리스트, 컬럼, 코드 등 하위 자식을 갖는 모든 블록 재귀 탐색
+      if (block.has_children && block.type !== 'child_page' && block.type !== 'child_database') {
         parsed.children = await fetchBlocksRecursively(block.id);
       }
       blocks.push(parsed);
@@ -415,6 +415,12 @@ function simplifyBlock(block) {
 
   if (type === 'callout') {
     result.icon = content.icon?.emoji || "📌";
+  } else if (type === 'code') {
+    result.language = content.language || 'plain text';
+    result.code = text;
+    result.html = escapeHtml(text);
+  } else if (type.startsWith('heading_')) {
+    result.isToggleable = content.is_toggleable || false;
   } else if (type === 'toggle') {
     result.summary = text || "열기 / 닫기";
     result.summaryHtml = html || escapeHtml(text) || "열기 / 닫기";

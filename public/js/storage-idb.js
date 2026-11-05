@@ -327,11 +327,26 @@ const ZenStorage = {
       };
     });
 
-    // 4) 오늘의 골든타임 복습 Top 5 큐 추출
+    // 4) 상태별 그룹화 (완료 vs 진행 중 vs 시작 전)
+    const completedDocs = enrichedDocs.filter(d => d.status === '완료');
+    const inProgressDocs = enrichedDocs.filter(d => d.status === '진행 중');
+    const todoDocs = enrichedDocs.filter(d => d.status === '시작 전');
+    // 실제 공부 대상 모수: '완료' 상태인 문서 (없으면 전체 폴백)
+    const targetDocs = completedDocs.length > 0 ? completedDocs : enrichedDocs;
+    const studiedCompletedDocs = targetDocs.filter(d => docLogsMap[d.id] && docLogsMap[d.id].length > 0);
+    const studiedTotalDocs = enrichedDocs.filter(d => docLogsMap[d.id] && docLogsMap[d.id].length > 0);
+
+    // 5) 오늘의 골든타임 복습 Top 5 큐 추출
+    // 긴급/도래는 이미 공부했던 문서이므로 포함, 신규(NEW)는 오직 작성 '완료'된 문서에서만 선별
     const goldenQueue = enrichedDocs
-      .filter(d => d.urgencyBadge === 'CRITICAL' || d.urgencyBadge === 'DUE' || d.urgencyBadge === 'NEW')
+      .filter(d => {
+        if (d.urgencyBadge === 'CRITICAL' || d.urgencyBadge === 'DUE') return true;
+        if (d.urgencyBadge === 'NEW') {
+          return d.status === '완료'; // 미완성 초안은 추천에서 제외
+        }
+        return false;
+      })
       .sort((a, b) => {
-        // 긴급(CRITICAL) > 도래(DUE) > 신규(NEW) 우선순위 정렬
         const priorityOrder = { 'CRITICAL': 3, 'DUE': 2, 'NEW': 1, 'APPROACHING': 0, 'STABLE': 0 };
         const diffP = (priorityOrder[b.urgencyBadge] || 0) - (priorityOrder[a.urgencyBadge] || 0);
         if (diffP !== 0) return diffP;
@@ -339,25 +354,36 @@ const ZenStorage = {
       })
       .slice(0, 5);
 
-    // 5) 카테고리별 마스터리(숙련도) 집계
+    // 6) 카테고리별 마스터리(숙련도) 집계 (완료된 공부 대상 노트 기준)
     const categoryStats = {};
-    enrichedDocs.forEach(d => {
+    targetDocs.forEach(d => {
       const cat = d.category || '기타 지식';
       if (!categoryStats[cat]) {
-        categoryStats[cat] = { total: 0, level0: 0, level1: 0, level2: 0, level3: 0 };
+        categoryStats[cat] = { total: 0, completedTotal: 0, level0: 0, level1: 0, level2: 0, level3: 0 };
       }
       categoryStats[cat].total++;
+      if (d.status === '완료') {
+        categoryStats[cat].completedTotal++;
+      }
       if (d.reviewCount === 0) categoryStats[cat].level0++;
       else if (d.reviewCount <= 2) categoryStats[cat].level1++;
       else if (d.reviewCount <= 4) categoryStats[cat].level2++;
       else categoryStats[cat].level3++;
     });
 
+    const coverageRate = targetDocs.length > 0
+      ? Math.round((studiedCompletedDocs.length / targetDocs.length) * 100)
+      : 0;
+
     return {
       summary: {
         totalDocuments: allDocuments.length || enrichedDocs.length,
-        studiedDocsCount: Object.keys(docLogsMap).length,
-        coverageRate: allDocuments.length ? Math.round((Object.keys(docLogsMap).length / allDocuments.length) * 100) : 0,
+        targetCompletedCount: targetDocs.length,
+        studiedCompletedCount: studiedCompletedDocs.length,
+        inProgressCount: inProgressDocs.length,
+        todoCount: todoDocs.length,
+        studiedDocsCount: studiedTotalDocs.length,
+        coverageRate,
         todayReviews,
         totalReviews: logs.length,
         totalStudyMinutes: Math.round(totalDurationSeconds / 60),

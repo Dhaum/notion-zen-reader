@@ -422,6 +422,96 @@ body {
   margin-bottom: 6px;
 }
 
+/* 코드 블록 & ASCII 다이어그램 (고정폭 및 태블릿 가로 스크롤 최적화) */
+.zen-code-wrapper {
+  margin: 18px 0 24px;
+  background-color: #0b1120;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.zen-code-lang {
+  font-size: 0.72rem;
+  font-family: var(--font-family-mono);
+  color: var(--text-muted);
+  padding: 4px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border-color);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.zen-code-block {
+  margin: 0;
+  padding: 16px 18px;
+  overflow-x: auto;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, Menlo, monospace;
+  font-size: 0.86rem;
+  line-height: 1.65;
+  white-space: pre;
+  color: #38bdf8;
+  tab-size: 2;
+  -webkit-overflow-scrolling: touch;
+}
+
+.zen-code-block code {
+  font-family: inherit;
+  color: inherit;
+  background: transparent;
+  padding: 0;
+}
+
+/* 섹션 구분선 */
+.zen-divider {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 32px 0;
+  opacity: 0.7;
+}
+
+/* 계층형 리스트 & 들여쓰기 블록 */
+.zen-list, .zen-numbered-list {
+  margin: 10px 0 16px 24px;
+  padding: 0;
+  line-height: 1.75;
+}
+
+.zen-list li, .zen-numbered-list li {
+  margin-bottom: 8px;
+}
+
+.zen-list ul, .zen-list ol, .zen-numbered-list ul, .zen-numbered-list ol {
+  margin-top: 6px;
+  margin-bottom: 6px;
+  margin-left: 20px;
+}
+
+.zen-indented-block {
+  margin-left: 20px;
+  margin-top: 6px;
+  margin-bottom: 10px;
+}
+
+/* 2열 컬럼 레이아웃 */
+.zen-columns {
+  display: flex;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.zen-column {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .zen-columns {
+    flex-direction: column;
+  }
+}
+
 /* 하단 플로팅 토스트 (학습 완료 알림) */
 .zen-toast {
   position: fixed;

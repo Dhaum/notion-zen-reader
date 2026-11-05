@@ -52,6 +52,10 @@ const Dashboard = {
       currentStreak: 1,
       totalReviews: 0,
       totalDocuments: 140,
+      targetCompletedCount: 38,
+      studiedCompletedCount: 0,
+      inProgressCount: 65,
+      todoCount: 37,
       studiedDocsCount: 0,
       coverageRate: 0,
       todayReviews: 0,
@@ -73,7 +77,7 @@ const Dashboard = {
               <span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 9999px; background: rgba(245, 158, 11, 0.18); color: #f59e0b; font-weight: 600;">Long-term Streak</span>
             </div>
             <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 3px;">
-              매일의 골든타임 복습이 140개 임상 지식을 완전한 장기 기억으로 정착시킵니다.
+              작성 완료된 <strong>${summary.targetCompletedCount || 38}개</strong> 노트를 우선 마스터하세요. (집필 중 ${summary.inProgressCount || 65}개, 시작 전 ${summary.todoCount || 37}개 제외)
             </div>
           </div>
         </div>
@@ -82,9 +86,9 @@ const Dashboard = {
             <span class="label">총 회독수</span>
             <span class="val highlight">${summary.totalReviews}회</span>
           </div>
-          <div class="pill-item">
-            <span class="label">지식 커버리지</span>
-            <span class="val">${summary.studiedDocsCount} / ${summary.totalDocuments} <span style="font-size: 0.75rem; color: var(--accent); font-weight: 600;">(${summary.coverageRate}%)</span></span>
+          <div class="pill-item" style="min-width: 130px;">
+            <span class="label">공부 대상 커버리지</span>
+            <span class="val highlight">${summary.studiedCompletedCount || 0} / ${summary.targetCompletedCount || 38} <span style="font-size: 0.75rem; color: var(--accent); font-weight: 700;">(${summary.coverageRate || 0}%)</span></span>
           </div>
           <div class="pill-item">
             <span class="label">오늘 복습</span>
@@ -108,7 +112,7 @@ const Dashboard = {
             <div class="panel-header">
               <div>
                 <span class="title">🎯 오늘의 골든타임 복습 Top 5</span>
-                <span class="subtitle">망각 곡선 임계 도래 우선순위</span>
+                <span class="subtitle">작성 완료(38개) 대상 망각 곡선 우선순위</span>
               </div>
               <span style="font-size: 0.75rem; color: var(--accent); font-weight: 600;">Clinical-SM2</span>
             </div>
