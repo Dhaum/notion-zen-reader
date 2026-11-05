@@ -502,3 +502,8 @@ const Reader = {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 };
+
+window.Reader = Reader;
+if (typeof module !== 'undefined') {
+  module.exports = Reader;
+}
