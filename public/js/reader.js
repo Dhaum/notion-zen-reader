@@ -24,7 +24,7 @@ const Reader = {
     try {
       const response = await fetch(`/api/documents/${docId}`, {
         headers: {
-          'x-zen-pin': localStorage.getItem('zen_pin_code') || '1234'
+          'x-zen-pin': localStorage.getItem('zen_pin_code') || ''
         }
       });
       if (response.status === 401) {

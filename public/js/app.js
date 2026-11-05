@@ -6,7 +6,6 @@ const App = {
   selectedStatus: 'all',     // 'all' | '완료' | '진행 중' | '시작 전'
   sortOrder: 'created_desc',  // 'created_desc' | 'created_asc' | 'updated_desc' | 'title_asc'
   searchQuery: '',
-  PIN_CODE: '1234', // 기본 4자리 PIN 번호 (필요 시 변경 가능)
 
   init() {
     this.initSecurity();
@@ -19,32 +18,73 @@ const App = {
   // 1. PIN 보안 인증 게이트
   initSecurity() {
     const isVerified = localStorage.getItem('zen_pin_verified');
+    const hasPin = localStorage.getItem('zen_pin_code');
     const modal = document.getElementById('pin-modal');
-    if (isVerified === 'true') {
-      if (!localStorage.getItem('zen_pin_code')) {
-        localStorage.setItem('zen_pin_code', this.PIN_CODE);
-      }
+    if (isVerified === 'true' && hasPin) {
       if (modal) modal.style.display = 'none';
     } else {
       if (modal) modal.style.display = 'flex';
     }
   },
 
-  verifyPin() {
+  async verifyPin() {
     const input = document.getElementById('pin-code-input');
     const errorMsg = document.getElementById('pin-error-msg');
+    const btn = document.querySelector('#pin-modal button.btn-primary');
     const enteredPin = (input.value || '').trim();
-    if (enteredPin === this.PIN_CODE) {
-      localStorage.setItem('zen_pin_verified', 'true');
-      localStorage.setItem('zen_pin_code', input.value);
-      document.getElementById('pin-modal').style.display = 'none';
-      errorMsg.style.display = 'none';
-      this.showToast('🔓 인증 완료! 지식 서재에 오신 것을 환영합니다.');
-      this.loadDocuments();
-    } else {
-      errorMsg.style.display = 'block';
-      input.value = '';
-      input.focus();
+
+    if (!enteredPin) {
+      if (errorMsg) {
+        errorMsg.innerText = 'PIN 번호를 입력해주세요.';
+        errorMsg.style.display = 'block';
+      }
+      return;
+    }
+
+    if (btn) btn.disabled = true;
+    if (errorMsg) errorMsg.style.display = 'none';
+
+    try {
+      const res = await fetch('/api/verify-pin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-zen-pin': enteredPin
+        }
+      });
+
+      if (res.ok) {
+        localStorage.setItem('zen_pin_verified', 'true');
+        localStorage.setItem('zen_pin_code', enteredPin);
+        document.getElementById('pin-modal').style.display = 'none';
+        if (errorMsg) errorMsg.style.display = 'none';
+        this.showToast('🔓 인증 완료! 지식 서재에 오신 것을 환영합니다.');
+        this.loadDocuments();
+      } else {
+        if (errorMsg) {
+          errorMsg.innerText = '올바른 PIN 번호가 아닙니다. 다시 입력해주세요.';
+          errorMsg.style.display = 'block';
+        }
+        input.value = '';
+        input.focus();
+      }
+    } catch (netErr) {
+      // 오프라인 상태일 경우 기기 로컬스토리지에 저장된 이전 유효 PIN과 대조
+      const savedPin = localStorage.getItem('zen_pin_code');
+      if (savedPin && savedPin === enteredPin) {
+        localStorage.setItem('zen_pin_verified', 'true');
+        document.getElementById('pin-modal').style.display = 'none';
+        if (errorMsg) errorMsg.style.display = 'none';
+        this.showToast('📡 오프라인 모드로 서재에 입장했습니다.');
+        this.loadDocuments();
+      } else {
+        if (errorMsg) {
+          errorMsg.innerText = '네트워크 연결 상태를 확인하거나 올바른 PIN을 입력해주세요.';
+          errorMsg.style.display = 'block';
+        }
+      }
+    } finally {
+      if (btn) btn.disabled = false;
     }
   },
 
@@ -131,7 +171,7 @@ const App = {
       const url = forceRefresh ? '/api/documents?refresh=true' : '/api/documents';
       const response = await fetch(url, {
         headers: {
-          'x-zen-pin': localStorage.getItem('zen_pin_code') || '1234'
+          'x-zen-pin': localStorage.getItem('zen_pin_code') || ''
         }
       });
       if (response.status === 401) {
@@ -367,7 +407,7 @@ const App = {
         try {
           const res = await fetch(`/api/documents/${docId}`, {
             headers: {
-              'x-zen-pin': localStorage.getItem('zen_pin_code') || '1234'
+              'x-zen-pin': localStorage.getItem('zen_pin_code') || ''
             }
           });
           if (res.status === 429) {

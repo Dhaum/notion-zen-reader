@@ -7,7 +7,7 @@ const Dashboard = {
     try {
       const response = await fetch('/api/study-stats', {
         headers: {
-          'x-zen-pin': localStorage.getItem('zen_pin_code') || '1234'
+          'x-zen-pin': localStorage.getItem('zen_pin_code') || ''
         }
       });
       if (response.status === 401) {

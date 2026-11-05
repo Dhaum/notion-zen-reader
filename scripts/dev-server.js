@@ -43,6 +43,7 @@ const documentsHandler = require('../api/documents');
 const documentDetailHandler = require('../api/document');
 const studyLogHandler = require('../api/study-log');
 const studyStatsHandler = require('../api/study-stats');
+const verifyPinHandler = require('../api/verify-pin');
 
 function serveStatic(res, filePath) {
   fs.readFile(filePath, (err, data) => {
@@ -103,6 +104,8 @@ const server = http.createServer((req, res) => {
           await studyLogHandler(req, res);
         } else if (pathname === '/api/study-stats') {
           await studyStatsHandler(req, res);
+        } else if (pathname === '/api/verify-pin') {
+          await verifyPinHandler(req, res);
         } else {
           res.status(404).json({ success: false, error: "API 엔드포인트를 찾을 수 없습니다." });
         }
