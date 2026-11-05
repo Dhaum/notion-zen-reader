@@ -397,9 +397,9 @@ const App = {
 
       html += `
         <div class="doc-card" onclick="Reader.open('${doc.id}')">
-          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px;">
-            <div class="doc-card-title" style="margin-bottom: 0; flex: 1; min-width: 0;">${this.escapeHtml(doc.title)}</div>
-            <span class="card-status-badge ${statusBadgeClass}">${this.escapeHtml(s)}</span>
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px;">
+            <div class="doc-card-title" style="margin-bottom: 0; flex: 1 1 auto; min-width: 0; word-break: keep-all; overflow-wrap: break-word;">${this.escapeHtml(doc.title)}</div>
+            <span class="card-status-badge ${statusBadgeClass}" style="white-space: nowrap !important; flex-shrink: 0 !important; display: inline-flex !important; word-break: keep-all !important; line-height: 1.2 !important;">${this.escapeHtml(s)}</span>
           </div>
           <div class="doc-card-meta">
             ${createdDate ? `<span style="color: var(--text-muted); font-size: 0.75rem;">📅 ${createdDate}</span>` : ''}

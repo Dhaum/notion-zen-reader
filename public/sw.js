@@ -176,18 +176,33 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // C. 정적 파일 및 SPA 네비게이션: Cache-First 또는 Stale-While-Revalidate
+  // C. 정적 코드 파일 (HTML, JS, CSS) -> Network First (온라인 시 최신 코드 100% 즉시 반영, 오프라인 시 캐시 폴백)
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname === '/' || url.pathname === '/index.html') {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const clone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/index.html')))
+    );
+    return;
+  }
+
+  // D. 이미지 및 기타 정적 자산: Cache-First
   event.respondWith(
     caches.match(event.request).then((cached) => {
-      if (cached) {
-        fetch(event.request).then((networkResponse) => {
-          if (networkResponse.status === 200) {
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, networkResponse));
-          }
-        }).catch(() => {});
-        return cached;
-      }
-      return fetch(event.request).catch(() => caches.match('/index.html'));
+      if (cached) return cached;
+      return fetch(event.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const clone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return networkResponse;
+      }).catch(() => caches.match('/index.html'));
     })
   );
 });
