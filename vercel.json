@@ -1,0 +1,51 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/documents",
+      "destination": "/api/documents.js"
+    },
+    {
+      "source": "/api/documents/:id",
+      "destination": "/api/document.js?id=:id"
+    },
+    {
+      "source": "/api/study-log",
+      "destination": "/api/study-log.js"
+    },
+    {
+      "source": "/api/study-stats",
+      "destination": "/api/study-stats.js"
+    },
+    {
+      "source": "/read/:id",
+      "destination": "/public/index.html"
+    },
+    {
+      "source": "/stats",
+      "destination": "/public/index.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/public/$1"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization, x-pin-code, x-zen-pin" },
+        { "key": "Cache-Control", "value": "no-store, max-age=0" }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    }
+  ]
+}

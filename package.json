@@ -1,0 +1,25 @@
+{
+  "name": "notion-zen-reader",
+  "version": "1.0.0",
+  "description": "알도큐브 iPlay 60 mini pro 전용 노션 지식 리더 및 독립 학습 트래커 PWA",
+  "main": "scripts/dev-server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node scripts/dev-server.js",
+    "dev": "node scripts/dev-server.js",
+    "test": "node scripts/test-auth.js"
+  },
+  "dependencies": {
+    "@notionhq/client": "^2.2.15"
+  },
+  "devDependencies": {},
+  "keywords": [
+    "notion",
+    "pwa",
+    "tablet-reader",
+    "study-tracker",
+    "zero-touch"
+  ],
+  "author": "Yoonjae",
+  "license": "MIT"
+}

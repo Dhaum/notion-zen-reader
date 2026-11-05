@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Local Environment Variables & Secrets
+.env
+.env*.local
+.env.production
+.env.development
+
+# Local Data Storage
+data/
+*.log
+
+# Vercel & Build Artifacts
+.vercel/
+dist/
+
+# OS Files
+.DS_Store
+Thumbs.db

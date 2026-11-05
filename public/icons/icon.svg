@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#bg)"/>
+  <!-- Book / Knowledge Icon -->
+  <path d="M128 160C128 142.3 142.3 128 160 128H352C369.7 128 384 142.3 384 160V352C384 369.7 369.7 384 352 384H160C142.3 384 128 369.7 128 352V160Z" fill="#334155" opacity="0.4"/>
+  <path d="M144 140H240V372H160C142.3 372 128 357.7 128 340V156C128 147.2 135.2 140 144 140Z" fill="#38bdf8" opacity="0.9"/>
+  <path d="M368 140H272V372H352C369.7 372 384 357.7 384 340V156C384 147.2 376.8 140 368 140Z" fill="#0284c7"/>
+  <!-- Spine Line -->
+  <line x1="256" y1="130" x2="256" y2="380" stroke="#f8fafc" stroke-width="8" stroke-linecap="round"/>
+  <!-- Reading Checkmark -->
+  <circle cx="370" cy="150" r="36" fill="#10b981"/>
+  <polyline points="356,150 366,160 384,142" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
