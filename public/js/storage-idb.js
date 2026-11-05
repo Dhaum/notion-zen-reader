@@ -1,10 +1,10 @@
 // public/js/storage-idb.js - 알도큐브 태블릿 PWA 전용 영구 IndexedDB 스토리지 매니저
-// Vercel 서버리스의 휘발성 파일시스템 한계를 극복하고 기기 내부(SSD)에 영구 보존합니다.
+// Vercel 서버리스의 휘발성 파일시스템 한계를 완벽히 극복하고 태블릿 기기 내부(SSD)에 영구 보존합니다.
 
 const ZenStorage = {
   DB_NAME: 'ZenReaderDB',
   DB_VERSION: 1,
-  STORE_NAME: 'study_logs',
+  STORE_NAME: 'studyLogs',
   db: null,
   isPersisted: false,
 
@@ -19,25 +19,41 @@ const ZenStorage = {
   async requestPersistentStorage() {
     if (navigator.storage && navigator.storage.persist) {
       try {
-        const isPersisted = await navigator.storage.persist();
-        this.isPersisted = isPersisted;
-        console.log(`[ZenStorage] 브라우저 영구 보존 락(Persist) 상태: ${isPersisted ? '🔒 획득 완료 (OS 삭제 방지)' : '일반 보존'}`);
+        const alreadyPersisted = await navigator.storage.persisted();
+        if (alreadyPersisted) {
+          this.isPersisted = true;
+          console.log('[ZenStorage] 🔒 영구 보존 락(Persistent Storage) 이미 활성화됨');
+        } else {
+          const granted = await navigator.storage.persist();
+          this.isPersisted = granted;
+          console.log(`[ZenStorage] 🔒 영구 보존 락(Persistent Storage) 요청 결과: ${granted ? '승인 완료' : '일반 보존'}`);
+        }
       } catch (err) {
         console.warn('[ZenStorage] Persist 요청 실패:', err);
       }
     }
   },
 
-  // IndexedDB 데이터베이스 열기
+  // IndexedDB 데이터베이스 열기 (기존 studyLogs 스토어와 100% 호환)
   openDB() {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
+      if (this.db) return resolve(this.db);
+      if (!window.indexedDB) {
+        console.warn('[ZenStorage] 브라우저가 IndexedDB를 지원하지 않습니다.');
+        return reject(new Error('IndexedDB not supported'));
+      }
+
+      const request = window.indexedDB.open(this.DB_NAME, this.DB_VERSION);
 
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
         if (!db.objectStoreNames.contains(this.STORE_NAME)) {
-          const store = db.createObjectStore(this.STORE_NAME, { keyPath: 'id' });
+          const store = db.createObjectStore(this.STORE_NAME, {
+            keyPath: 'id',
+            autoIncrement: true
+          });
           store.createIndex('docId', 'docId', { unique: false });
+          store.createIndex('timestamp', 'timestamp', { unique: false });
           store.createIndex('readAt', 'readAt', { unique: false });
         }
       };
@@ -55,24 +71,29 @@ const ZenStorage = {
     });
   },
 
-  // 기존 localStorage에 임시 저장되어 있던 기록이 있다면 IndexedDB로 마이그레이션
+  // 기존 localStorage에 보관 중이던 기록을 IndexedDB로 마이그레이션
   async migrateFromLocalStorage() {
     try {
       const raw = localStorage.getItem('zen_permanent_logs');
       if (raw) {
         const list = JSON.parse(raw);
         if (Array.isArray(list) && list.length > 0) {
-          console.log(`[ZenStorage] 기존 localStorage 로그 ${list.length}건을 IndexedDB로 이관합니다.`);
+          const existingLogs = await this.getAllLogs();
+          const existingIds = new Set(existingLogs.map(l => l.id || l.timestamp));
+
           for (const item of list) {
-            const logEntry = {
-              id: item.id || ('log-' + (item.loggedAt ? new Date(item.loggedAt).getTime() : Date.now()) + '-' + Math.random().toString(36).substr(2, 4)),
-              docId: item.docId,
-              docTitle: item.docTitle || '제목 없음',
-              readAt: item.readAt || item.loggedAt || new Date().toISOString(),
-              durationSeconds: Number(item.durationSeconds) || 60,
-              device: item.device || 'alldocube-tablet'
-            };
-            await this.putLog(logEntry);
+            const uniqueKey = item.id || item.timestamp;
+            if (!uniqueKey || !existingIds.has(uniqueKey)) {
+              await this.putLog({
+                docId: item.docId,
+                docTitle: item.docTitle || '제목 없음',
+                readAt: item.readAt || item.timestamp || item.loggedAt || new Date().toISOString(),
+                timestamp: item.timestamp || item.readAt || new Date().toISOString(),
+                durationSeconds: Number(item.durationSeconds) || 60,
+                reviewCount: item.reviewCount || 1,
+                device: item.device || 'alldocube-tablet'
+              });
+            }
           }
         }
       }
@@ -84,38 +105,45 @@ const ZenStorage = {
   putLog(logEntry) {
     return new Promise((resolve, reject) => {
       if (!this.db) return resolve(null);
-      const tx = this.db.transaction([this.STORE_NAME], 'readwrite');
-      const store = tx.objectStore(this.STORE_NAME);
-      const request = store.put(logEntry);
-      request.onsuccess = () => resolve(logEntry);
-      request.onerror = () => reject(request.error);
+      try {
+        const tx = this.db.transaction([this.STORE_NAME], 'readwrite');
+        const store = tx.objectStore(this.STORE_NAME);
+        const request = store.put(logEntry);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      } catch (err) {
+        reject(err);
+      }
     });
   },
 
   // 2. 새로운 학습 체크인 기록 저장
   async saveLog(entry) {
     if (!this.db) await this.openDB();
+    const nowIso = new Date().toISOString();
 
     const newLog = {
-      id: 'log-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
       docId: entry.docId,
       docTitle: entry.docTitle || '제목 없음',
-      readAt: entry.readAt || new Date().toISOString(),
+      readAt: entry.readAt || nowIso,
+      timestamp: entry.timestamp || nowIso,
       durationSeconds: Number(entry.durationSeconds) || 60,
+      reviewCount: Number(entry.reviewCount) || 1,
       device: entry.device || 'alldocube-iplay60'
     };
 
-    await this.putLog(newLog);
+    const recordId = await this.putLog(newLog);
+    newLog.id = recordId;
 
-    // 2중 안전망: localStorage에도 동기화 복사본 유지
+    // 2중 안전망: localStorage 미러링
     try {
       const raw = localStorage.getItem('zen_permanent_logs');
       const list = raw ? JSON.parse(raw) : [];
       list.unshift(newLog);
-      localStorage.setItem('zen_permanent_logs', JSON.stringify(list.slice(0, 100))); // 최근 100건 보존
+      localStorage.setItem('zen_permanent_logs', JSON.stringify(list.slice(0, 500)));
     } catch (e) {}
 
-    console.log(`[ZenStorage] IndexedDB 저장 완료: ${newLog.docTitle} (${newLog.docId})`);
+    console.log(`[ZenStorage] 태블릿 영구 저장 완료: ${newLog.docTitle} (회독: ${newLog.reviewCount})`);
     return newLog;
   },
 
@@ -125,18 +153,27 @@ const ZenStorage = {
       if (!this.db) {
         return resolve([]);
       }
-      const tx = this.db.transaction([this.STORE_NAME], 'readonly');
-      const store = tx.objectStore(this.STORE_NAME);
-      const request = store.getAll();
+      try {
+        const tx = this.db.transaction([this.STORE_NAME], 'readonly');
+        const store = tx.objectStore(this.STORE_NAME);
+        const request = store.getAll();
 
-      request.onsuccess = () => {
-        const logs = request.result || [];
-        // 최신순 정렬
-        logs.sort((a, b) => new Date(b.readAt).getTime() - new Date(a.readAt).getTime());
-        resolve(logs);
-      };
+        request.onsuccess = () => {
+          const logs = request.result || [];
+          // 최신순 정렬
+          logs.sort((a, b) => {
+            const timeA = new Date(a.readAt || a.timestamp || 0).getTime();
+            const timeB = new Date(b.readAt || b.timestamp || 0).getTime();
+            return timeB - timeA;
+          });
+          resolve(logs);
+        };
 
-      request.onerror = () => reject(request.error);
+        request.onerror = () => reject(request.error);
+      } catch (err) {
+        console.warn('[ZenStorage] getAllLogs 실패:', err);
+        resolve([]);
+      }
     });
   },
 
@@ -146,16 +183,19 @@ const ZenStorage = {
     const map = {};
 
     logs.forEach(log => {
+      if (!log.docId) return;
+      const logDate = log.readAt || log.timestamp || new Date().toISOString();
+
       if (!map[log.docId]) {
         map[log.docId] = {
           reviewCount: 0,
-          lastReviewedAt: log.readAt
+          lastReviewedAt: logDate
         };
       }
       map[log.docId].reviewCount++;
       // 최신 복습일 갱신
-      if (new Date(log.readAt) > new Date(map[log.docId].lastReviewedAt)) {
-        map[log.docId].lastReviewedAt = log.readAt;
+      if (new Date(logDate) > new Date(map[log.docId].lastReviewedAt)) {
+        map[log.docId].lastReviewedAt = logDate;
       }
     });
 
@@ -180,7 +220,7 @@ const ZenStorage = {
     }
 
     logs.forEach(log => {
-      const dateStr = (log.readAt || '').slice(0, 10);
+      const dateStr = (log.readAt || log.timestamp || '').slice(0, 10);
       if (dateStr === todayStr) {
         todayReviews++;
       }
@@ -188,27 +228,31 @@ const ZenStorage = {
         heatmap[dateStr]++;
       }
 
+      if (!log.docId) return;
+
       if (!docStats[log.docId]) {
         docStats[log.docId] = {
           docId: log.docId,
-          docTitle: log.docTitle,
+          docTitle: log.docTitle || '제목 없음',
           reviewCount: 0,
           totalDurationSeconds: 0,
-          lastReviewedAt: log.readAt,
+          lastReviewedAt: log.readAt || log.timestamp,
           history: []
         };
       }
       docStats[log.docId].reviewCount++;
       docStats[log.docId].totalDurationSeconds += (Number(log.durationSeconds) || 0);
-      docStats[log.docId].history.push(log.readAt);
-      if (new Date(log.readAt) > new Date(docStats[log.docId].lastReviewedAt)) {
-        docStats[log.docId].lastReviewedAt = log.readAt;
+      docStats[log.docId].history.push(log.readAt || log.timestamp);
+
+      const logTime = new Date(log.readAt || log.timestamp);
+      if (logTime > new Date(docStats[log.docId].lastReviewedAt)) {
+        docStats[log.docId].lastReviewedAt = log.readAt || log.timestamp;
       }
     });
 
     const uniqueDocsCount = Object.keys(docStats).length;
 
-    // 에빙하우스 망각 곡선 복습 추천 큐 (복습한 지 7일 이상 경과 또는 미완료)
+    // 에빙하우스 망각 곡선 복습 추천 큐 (복습한 지 7일 이상 경과)
     const docList = Object.values(docStats);
     const recommendations = docList.map(doc => {
       const lastDate = new Date(doc.lastReviewedAt);
@@ -280,11 +324,12 @@ const ZenStorage = {
           for (const item of logs) {
             if (item.docId) {
               await this.putLog({
-                id: item.id || ('log-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4)),
                 docId: item.docId,
                 docTitle: item.docTitle || '제목 없음',
-                readAt: item.readAt || new Date().toISOString(),
+                readAt: item.readAt || item.timestamp || new Date().toISOString(),
+                timestamp: item.timestamp || item.readAt || new Date().toISOString(),
                 durationSeconds: Number(item.durationSeconds) || 60,
+                reviewCount: Number(item.reviewCount) || 1,
                 device: item.device || 'backup-restore'
               });
               importedCount++;

@@ -140,6 +140,8 @@ async function runTests() {
   console.log('🧪 [보안 통합 테스트 2: 4대 핵심 API 게이트웨이 침투 방어 검증]');
   console.log('====================================================');
 
+  let sampleDocId = 'doc-1';
+
   // Test 2-1: /api/documents 차단 및 통과
   {
     // 무인증 요청 (침투 시도)
@@ -157,6 +159,9 @@ async function runTests() {
     assert.strictEqual(resPass.statusCode, 200);
     assert.strictEqual(resPass.bodyData.success, true);
     assert.ok(Array.isArray(resPass.bodyData.documents));
+    if (resPass.bodyData.documents.length > 0) {
+      sampleDocId = resPass.bodyData.documents[0].id;
+    }
     console.log(`  ✅ [PASS] /api/documents -> 무인증 401 차단 / 정당 PIN 200 통과 (문서 ${resPass.bodyData.documents.length}건 획득)`);
   }
 
@@ -171,12 +176,12 @@ async function runTests() {
     const { req: reqPass, res: resPass } = createMockReqRes({
       method: 'GET',
       headers: { 'x-zen-pin': '1234' },
-      query: { id: 'doc-1' }
+      query: { id: sampleDocId }
     });
     await documentHandler(reqPass, resPass);
     assert.strictEqual(resPass.statusCode, 200);
     assert.strictEqual(resPass.bodyData.success, true);
-    console.log('  ✅ [PASS] /api/document?id=doc-1 -> 무인증 401 차단 / 정당 PIN 200 상세 파싱 통과');
+    console.log(`  ✅ [PASS] /api/document?id=${sampleDocId} -> 무인증 401 차단 / 정당 PIN 200 상세 파싱 통과`);
   }
 
   // Test 2-3: /api/study-log 차단 및 통과

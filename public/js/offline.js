@@ -172,8 +172,10 @@ const OfflineManager = {
 
   // 학습 로그 전송 (로컬 기기 2중 영구 저장 + 오프라인 큐 보관)
   async sendStudyLog(payload) {
-    // 1. 태블릿 브라우저 2중 안전망 (IndexedDB + localStorage) 영구 저장
-    await this.savePermanentLocalLog(payload);
+    // 1. ZenStorage가 없는 경우에만 단독 폴백 저장 (중복 삽입 방지)
+    if (typeof ZenStorage === 'undefined') {
+      await this.savePermanentLocalLog(payload);
+    }
 
     if (!this.isOnline) {
       console.log('[offline] 오프라인 상태: 학습 로그를 로컬 큐에 임시 저장합니다.', payload);

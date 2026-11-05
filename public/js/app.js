@@ -194,7 +194,7 @@ const App = {
           const statsMap = await ZenStorage.getDocStatsMap();
           for (const doc of this.documents) {
             if (statsMap[doc.id]) {
-              doc.reviewCount = Math.max(doc.reviewCount || 0, statsMap[doc.id].reviewCount);
+              doc.reviewCount = statsMap[doc.id].reviewCount;
               if (statsMap[doc.id].lastReviewedAt) {
                 doc.lastReviewedAt = statsMap[doc.id].lastReviewedAt;
               }
