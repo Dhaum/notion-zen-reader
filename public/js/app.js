@@ -215,7 +215,60 @@ const App = {
     }
   },
 
-  // 4. 노션 문서 목록 로딩 (새 글 반영용 forceRefresh 옵션 지원)
+  // 3-1. 노션 문서 변경 감지 및 로컬 동기화 타임스탬프 맵 관리 ('zen_doc_sync_map')
+  getDocSyncMap() {
+    try {
+      const raw = localStorage.getItem('zen_doc_sync_map');
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  },
+
+  setDocSyncMap(docId, updatedAt) {
+    if (!docId) return;
+    try {
+      const map = this.getDocSyncMap();
+      map[docId] = {
+        cachedUpdatedAt: updatedAt || new Date().toISOString(),
+        lastSyncedAt: Date.now()
+      };
+      localStorage.setItem('zen_doc_sync_map', JSON.stringify(map));
+    } catch (e) {
+      console.warn('[App] syncMap 저장 실패:', e);
+    }
+  },
+
+  bulkSetDocSyncMap(items) {
+    try {
+      const map = this.getDocSyncMap();
+      const now = Date.now();
+      items.forEach(it => {
+        if (it && it.id) {
+          map[it.id] = {
+            cachedUpdatedAt: it.updatedAt || new Date().toISOString(),
+            lastSyncedAt: now
+          };
+        }
+      });
+      localStorage.setItem('zen_doc_sync_map', JSON.stringify(map));
+    } catch (e) {
+      console.warn('[App] bulk syncMap 저장 실패:', e);
+    }
+  },
+
+  // 헤더 새로고침 통합 분기 핸들러 (서재/대시보드 -> 메타데이터 동기화, 리더 뷰 -> 단일 문서 실시간 핀포인트 갱신)
+  handleHeaderRefresh() {
+    if (this.currentView === 'reader') {
+      if (typeof Reader !== 'undefined' && Reader.refreshCurrentDoc) {
+        Reader.refreshCurrentDoc();
+      }
+    } else {
+      this.loadDocuments(true);
+    }
+  },
+
+  // 4. 노션 문서 목록 로딩 (새 글 반영용 forceRefresh 옵션 및 수정 변경 감지)
   async loadDocuments(forceRefresh = false) {
     const listContainer = document.getElementById('doc-card-list');
     listContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-muted);">지식 문서를 동기화하는 중입니다...</div>';
@@ -238,6 +291,26 @@ const App = {
 
       this.documents = data.documents;
 
+      // 4대 안전장치: 노션 수정 변경 감지 (로컬 캐시 타임스탬프와 노션 updatedAt 대조)
+      const syncMap = this.getDocSyncMap();
+      let updatedDocsCount = 0;
+      this.documents.forEach(doc => {
+        const localSync = syncMap[doc.id];
+        // 최초 방문 시 140개 뱃지 스팸 방지: 로컬에 기 열람/캐싱된 기록이 있는 문서만 수정 감지!
+        if (localSync && localSync.cachedUpdatedAt && doc.updatedAt) {
+          const remoteTime = new Date(doc.updatedAt).getTime();
+          const localTime = new Date(localSync.cachedUpdatedAt).getTime();
+          if (remoteTime > localTime) {
+            doc.hasUpdate = true;
+            updatedDocsCount++;
+          } else {
+            doc.hasUpdate = false;
+          }
+        } else {
+          doc.hasUpdate = false;
+        }
+      });
+
       // 로컬 IndexedDB에 저장된 회독수와 최신 복습일자 결합
       if (typeof ZenStorage !== 'undefined') {
         try {
@@ -258,7 +331,11 @@ const App = {
       this.updateStatusPillCounts();
       this.applyFilterAndSort();
       if (forceRefresh) {
-        this.showToast(`✨ 최신 노션 지식 DB 동기화 완료 (${data.documents.length}개 문서)`);
+        if (updatedDocsCount > 0) {
+          this.showToast(`✨ 최신 노션 지식 DB 동기화 완료 (수정된 문서 ${updatedDocsCount}건 감지)`);
+        } else {
+          this.showToast(`✨ 최신 노션 지식 DB 동기화 완료 (${data.documents.length}개 문서)`);
+        }
       }
     } catch (err) {
       listContainer.innerHTML = `
@@ -378,6 +455,23 @@ const App = {
     }
 
     let html = '';
+
+    // 수정 감지된 문서가 있을 때 스마트 상단 알림 배너 노출
+    const modifiedDocs = this.documents.filter(d => d.hasUpdate);
+    if (modifiedDocs.length > 0) {
+      html += `
+        <div class="doc-update-alert-banner">
+          <div class="update-banner-content">
+            <span class="update-banner-icon">⚡</span>
+            <span class="update-banner-text">노션에서 수정된 문서 <strong>${modifiedDocs.length}건</strong>이 감지되었습니다.</span>
+          </div>
+          <button class="btn btn-update-all" onclick="event.stopPropagation(); App.updateModifiedDocs()">
+            ⚡ 수정된 ${modifiedDocs.length}개 일괄 최신화
+          </button>
+        </div>
+      `;
+    }
+
     this.filteredDocuments.forEach(doc => {
       const lastDate = doc.lastReviewedAt ? new Date(doc.lastReviewedAt).toLocaleDateString() : '미학습';
       const createdDate = doc.createdAt ? new Date(doc.createdAt).toLocaleDateString() : '';
@@ -395,10 +489,18 @@ const App = {
         ? `<span class="doc-review-badge">🏆 ${doc.reviewCount}회독</span>`
         : `<span style="font-size: 0.75rem; color: var(--text-muted);">미학습</span>`;
 
+      // 노션 수정 감지 뱃지
+      const updatedBadge = doc.hasUpdate
+        ? `<span class="badge-doc-updated" title="노션에서 최신 내용으로 수정되었습니다. (클릭 시 즉시 열람 및 최신 반영)">✨ 수정됨</span>`
+        : '';
+
       html += `
         <div class="doc-card" onclick="Reader.open('${doc.id}')">
           <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px;">
-            <div class="doc-card-title" style="margin-bottom: 0; flex: 1 1 auto; min-width: 0; word-break: keep-all; overflow-wrap: break-word;">${this.escapeHtml(doc.title)}</div>
+            <div class="doc-card-title" style="margin-bottom: 0; flex: 1 1 auto; min-width: 0; word-break: keep-all; overflow-wrap: break-word;">
+              ${this.escapeHtml(doc.title)}
+              ${updatedBadge}
+            </div>
             <span class="card-status-badge ${statusBadgeClass}" style="white-space: nowrap !important; flex-shrink: 0 !important; display: inline-flex !important; word-break: keep-all !important; line-height: 1.2 !important;">${this.escapeHtml(s)}</span>
           </div>
           <div class="doc-card-meta">
@@ -412,6 +514,68 @@ const App = {
     });
 
     listContainer.innerHTML = html;
+  },
+
+  // 4-1. 노션에서 수정 감지된 문서들만 정밀 일괄 최신화 (300ms Pacing + 429 원천 차단)
+  async updateModifiedDocs() {
+    if (!navigator.onLine) {
+      this.showToast('⚠️ 오프라인 상태에서는 일괄 최신화를 진행할 수 없습니다.');
+      return;
+    }
+
+    const modifiedList = this.documents.filter(d => d.hasUpdate);
+    if (modifiedList.length === 0) {
+      this.showToast('✨ 이미 모든 문서가 최신 상태입니다.');
+      return;
+    }
+
+    const count = modifiedList.length;
+    this.showToast(`⚡ 수정된 문서 ${count}건 일괄 최신화 시작...`);
+
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < count; i++) {
+      const doc = modifiedList[i];
+      try {
+        const res = await fetch(`/api/documents/${doc.id}?refresh=true`, {
+          headers: {
+            'x-zen-pin': localStorage.getItem('zen_pin_code') || ''
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.document) {
+            this.setDocSyncMap(doc.id, data.document.updatedAt || doc.updatedAt);
+            doc.hasUpdate = false;
+            successCount++;
+          }
+        } else {
+          failCount++;
+        }
+      } catch (err) {
+        console.warn('[App] 문서 최신화 실패:', doc.title, err);
+        failCount++;
+      }
+
+      const current = i + 1;
+      const pct = Math.round((current / count) * 100);
+      this.showToast(`⚡ 수정 문서 최신화 중... ${current}/${count} (${pct}%)`);
+
+      if (i < count - 1) {
+        await sleep(300); // 300ms Pacing
+      }
+    }
+
+    // 변경된 뱃지 및 배너 즉시 반영
+    this.applyFilterAndSort();
+
+    if (failCount === 0) {
+      this.showToast(`🎉 수정된 ${successCount}건의 문서가 모두 최신 버전으로 반영되었습니다!`);
+    } else {
+      this.showToast(`⚠️ 최신화 완료: 성공 ${successCount}건 / 실패 ${failCount}건`);
+    }
   },
 
   // 5. 뷰 전환 제어
@@ -535,6 +699,9 @@ const App = {
               );
             }
           }
+          // 로컬 동기화 맵에 캐싱 시점의 updatedAt 기록
+          this.setDocSyncMap(doc.id, (docData.document && docData.document.updatedAt) || doc.updatedAt);
+          doc.hasUpdate = false;
           successCount++;
         } else {
           failCount++;

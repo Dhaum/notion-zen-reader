@@ -16,7 +16,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon.png">
 
-  <link rel="stylesheet" href="/css/app.css?v=20261106_v8">
+  <link rel="stylesheet" href="/css/app.css?v=20261106_v9">
 </head>
 <body class="theme-dark font-md">
 
@@ -39,7 +39,7 @@
       <button class="btn btn-icon" onclick="App.downloadAllForOffline()" title="전체 문서 오프라인 일괄 다운로드">📦</button>
       <button class="btn btn-icon" onclick="App.cycleFontSize()" title="글자 크기 변경">🔤</button>
       <button class="btn btn-icon" onclick="App.toggleTheme()" title="화면 테마 변경">🌓</button>
-      <button class="btn btn-icon" onclick="App.loadDocuments(true)" title="노션 최신 동기화">🔄</button>
+      <button id="header-refresh-btn" class="btn btn-icon" onclick="App.handleHeaderRefresh()" title="노션 최신 동기화">🔄</button>
     </div>
   </header>
 

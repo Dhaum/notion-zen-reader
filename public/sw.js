@@ -1,5 +1,5 @@
 // public/sw.js - PWA 오프라인 캐싱, 영구 이미지 보존 및 백그라운드 동기화 서비스 워커
-const CACHE_NAME = 'zen-reader-v8';
+const CACHE_NAME = 'zen-reader-v9';
 const IMAGE_CACHE_NAME = 'zen-images-v1';
 
 const STATIC_ASSETS = [
@@ -146,30 +146,49 @@ self.addEventListener('fetch', (event) => {
 
   // B. API 요청 (/api/documents, /api/documents/:id, /api/study-stats)
   if (url.pathname.startsWith('/api/')) {
+    // 캐시 키 정규화: ?refresh=true / ?force=true 파라미터가 포함되어 있어도 오프라인에서 매칭되도록 정규화 키 생성
+    const normalizedUrl = new URL(event.request.url);
+    const hasRefreshParam = normalizedUrl.searchParams.has('refresh') || normalizedUrl.searchParams.has('force');
+    if (hasRefreshParam) {
+      normalizedUrl.searchParams.delete('refresh');
+      normalizedUrl.searchParams.delete('force');
+    }
+    const normalizedKey = normalizedUrl.toString();
+
     event.respondWith(
       fetch(event.request)
         .then((response) => {
           if (response.status === 200) {
             const responseClone = response.clone();
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseClone);
+              // 원본 요청 URL 및 정규화된 키 모두 캐싱하여 오프라인 매칭 보장
+              cache.put(event.request, responseClone.clone());
+              if (hasRefreshParam) {
+                cache.put(normalizedKey, responseClone);
+              }
             });
           }
           return response;
         })
-        .catch(() => {
-          return caches.match(event.request).then((cachedResponse) => {
-            if (cachedResponse) {
-              console.log('[ServiceWorker] 오프라인 API 캐시에서 반환:', url.pathname);
-              return cachedResponse;
-            }
-            return new Response(JSON.stringify({
-              success: false,
-              offline: true,
-              message: "오프라인 상태입니다. 이전에 열람하지 않은 문서는 연결 후 조회 가능합니다."
-            }), {
-              headers: { 'Content-Type': 'application/json' }
-            });
+        .catch(async () => {
+          const cache = await caches.open(CACHE_NAME);
+          let cachedResponse = await cache.match(event.request);
+          if (!cachedResponse && hasRefreshParam) {
+            cachedResponse = await cache.match(normalizedKey);
+          }
+          if (!cachedResponse) {
+            cachedResponse = await cache.match(event.request, { ignoreSearch: true });
+          }
+          if (cachedResponse) {
+            console.log('[ServiceWorker] 오프라인 API 캐시에서 반환:', url.pathname);
+            return cachedResponse;
+          }
+          return new Response(JSON.stringify({
+            success: false,
+            offline: true,
+            message: "오프라인 상태입니다. 이전에 열람하지 않은 문서는 연결 후 조회 가능합니다."
+          }), {
+            headers: { 'Content-Type': 'application/json' }
           });
         })
     );

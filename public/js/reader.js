@@ -61,6 +61,17 @@ const Reader = {
         }
       }
 
+      // 로컬 동기화 타임스탬프 갱신 (열람 시 최신 상태로 동기화 기록)
+      if (typeof App !== 'undefined') {
+        if (App.setDocSyncMap) {
+          App.setDocSyncMap(docId, this.currentDoc.updatedAt);
+        }
+        if (App.documents) {
+          const cachedDoc = App.documents.find(d => d.id === docId);
+          if (cachedDoc) cachedDoc.hasUpdate = false;
+        }
+      }
+
       this.render(this.currentDoc);
       this.setupSmartScroll();
       window.scrollTo(0, 0);
@@ -119,15 +130,93 @@ const Reader = {
     App.showToast(this.isAllTogglesExpanded ? '👁️ 모든 셀프테스트 토글을 열었습니다.' : '🙈 모든 셀프테스트 토글을 닫았습니다.');
   },
 
+  // 현재 열람 중인 단일 문서만 노션 API에서 실시간 1:1 핀포인트 최신화 (~0.4초 소요)
+  async refreshCurrentDoc() {
+    if (!this.currentDoc || !this.currentDoc.id) {
+      if (typeof App !== 'undefined') App.showToast('새로고침할 문서가 없습니다.');
+      return;
+    }
+
+    const docId = this.currentDoc.id;
+    const docTitle = this.currentDoc.title || '문서';
+    const refreshBtn = document.getElementById('btn-reader-pinpoint-refresh');
+    const headerRefreshBtn = document.getElementById('header-refresh-btn');
+
+    if (refreshBtn) refreshBtn.classList.add('spinning');
+    if (headerRefreshBtn) headerRefreshBtn.classList.add('spinning');
+    if (typeof App !== 'undefined') {
+      App.showToast(`🔄 [${docTitle}] 노션 실시간 최신 내용 조회 중...`);
+    }
+
+    try {
+      const response = await fetch(`/api/documents/${docId}?refresh=true`, {
+        headers: {
+          'x-zen-pin': localStorage.getItem('zen_pin_code') || ''
+        }
+      });
+
+      if (response.status === 401 && typeof App !== 'undefined') {
+        App.handleUnauthorized();
+        throw new Error("인증 실패: 올바른 PIN 번호가 필요합니다.");
+      }
+
+      const data = await response.json();
+      if (!data.success || !data.document) {
+        throw new Error(data.error || "최신 문서를 불러오지 못했습니다.");
+      }
+
+      // 회독수 및 복습일자 보존
+      const prevReviewCount = this.currentDoc.reviewCount;
+      const prevLastReviewedAt = this.currentDoc.lastReviewedAt;
+
+      this.currentDoc = data.document;
+      this.currentDoc.reviewCount = Math.max(this.currentDoc.reviewCount || 0, prevReviewCount || 0);
+      if (prevLastReviewedAt) {
+        this.currentDoc.lastReviewedAt = prevLastReviewedAt;
+      }
+
+      // 4대 안전장치: 독서 타이머(durationSeconds, readingStartTime)는 절대 초기화하지 않고 연속 유지!
+      const currentScrollY = window.scrollY;
+
+      // 본문 재렌더링
+      this.render(this.currentDoc);
+      this.setupSmartScroll();
+      window.scrollTo(0, currentScrollY);
+
+      // 로컬 동기화 타임스탬프 갱신
+      if (typeof App !== 'undefined') {
+        if (App.setDocSyncMap) {
+          App.setDocSyncMap(docId, this.currentDoc.updatedAt);
+        }
+        if (App.documents) {
+          const cachedDoc = App.documents.find(d => d.id === docId);
+          if (cachedDoc) cachedDoc.hasUpdate = false;
+        }
+        App.showToast(`✨ [${docTitle}] 노션 최신 내용이 실시간 반영되었습니다!`);
+      }
+    } catch (err) {
+      console.error('[Reader] 실시간 동기화 오류:', err);
+      if (typeof App !== 'undefined') {
+        App.showToast(`⚠️ 실시간 동기화 실패: ${err.message}`);
+      }
+    } finally {
+      if (refreshBtn) refreshBtn.classList.remove('spinning');
+      if (headerRefreshBtn) headerRefreshBtn.classList.remove('spinning');
+    }
+  },
+
   render(doc) {
     const container = document.getElementById('reader-content');
     const lastDate = doc.lastReviewedAt ? new Date(doc.lastReviewedAt).toLocaleDateString() : '기록 없음';
 
     let html = `
       <div class="reader-header">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 8px;">
           <button class="btn btn-icon" onclick="App.showView('list')">← 서재 목록</button>
-          <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+            <button id="btn-reader-pinpoint-refresh" class="btn btn-icon" onclick="Reader.refreshCurrentDoc()" title="노션 실시간 최신 내용 새로고침 (0.4초)">
+              🔄 <span style="font-size: 0.75rem; font-weight: 600; margin-left: 2px;">실시간 갱신</span>
+            </button>
             <span id="header-timer-display" style="font-size: 0.85rem; color: var(--text-muted); font-family: var(--font-family-mono);">00:00</span>
             <button id="top-checkin-btn" class="btn btn-primary" style="font-size: 0.8rem; padding: 4px 12px;" onclick="Reader.triggerManualCheckin('good')">
               🎯 1회독 완료
@@ -183,6 +272,7 @@ const Reader = {
     `;
 
     container.innerHTML = html;
+    this.updateTimerDisplay();
   },
 
   renderBlocks(blocks) {
