@@ -535,6 +535,15 @@ const Reader = {
     const newCount = (this.currentDoc.reviewCount || 0) + 1;
     this.currentDoc.reviewCount = newCount;
 
+    // 서재 목록 인메모리 캐시 즉시 0ms 동기화 (뒤로가기 시 즉각 반영)
+    if (typeof App !== 'undefined' && Array.isArray(App.documents)) {
+      const target = App.documents.find(d => d.id === this.currentDoc.id);
+      if (target) {
+        target.reviewCount = newCount;
+        target.lastReviewedAt = new Date().toISOString();
+      }
+    }
+
     const payload = {
       docId: this.currentDoc.id,
       docTitle: this.currentDoc.title,

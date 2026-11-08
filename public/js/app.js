@@ -280,10 +280,32 @@ const App = {
     this.loadDocuments(true);
   },
 
-  // 4. 노션 문서 목록 로딩 (새 글 반영용 forceRefresh 옵션 및 수정 변경 감지)
+  // 4. 노션 문서 목록 로딩 (새 글 반영용 forceRefresh 옵션, SWR 비파괴 캐시 렌더링 및 수정 변경 감지)
   async loadDocuments(forceRefresh = false) {
     const listContainer = document.getElementById('doc-card-list');
-    listContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-muted);">지식 문서를 동기화하는 중입니다...</div>';
+    const hasExistingData = Array.isArray(this.documents) && this.documents.length > 0;
+
+    // 1) 로컬스토리지 캐시 우선 복원 (0ms 즉시 렌더링)
+    if (!hasExistingData && !forceRefresh) {
+      try {
+        const cached = localStorage.getItem('zen_cached_documents');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            this.documents = parsed;
+            this.updateStatusPillCounts();
+            this.applyFilterAndSort();
+          }
+        }
+      } catch (e) {
+        console.warn('[App] 로컬 캐시 파싱 실패:', e);
+      }
+    }
+
+    // 2) 화면에 보여줄 데이터가 전혀 없을 때만 최초 1회 스피너 노출 (비파괴 렌더링)
+    if (!this.documents || this.documents.length === 0) {
+      listContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-muted);">지식 문서를 동기화하는 중입니다...</div>';
+    }
 
     try {
       const url = forceRefresh ? '/api/documents?refresh=true' : '/api/documents';
@@ -302,6 +324,13 @@ const App = {
       }
 
       this.documents = data.documents;
+
+      // 로컬스토리지에 최신 문서 목록 캐시 보존
+      try {
+        localStorage.setItem('zen_cached_documents', JSON.stringify(data.documents));
+      } catch (e) {
+        console.warn('[App] 문서 로컬 캐싱 실패:', e);
+      }
 
       // 4대 안전장치: 노션 수정 변경 감지 (로컬 캐시 타임스탬프와 노션 updatedAt 대조)
       const syncMap = this.getDocSyncMap();
@@ -356,6 +385,32 @@ const App = {
           <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 6px;">${err.message}</p>
         </div>
       `;
+    }
+  },
+
+  // 로컬 IndexedDB의 회독수만 O(N)으로 네트워크 없이 즉시 결합 (3~5ms 소요)
+  async refreshLocalStatsOnly() {
+    if (typeof ZenStorage === 'undefined' || !this.documents || this.documents.length === 0) return;
+    try {
+      const statsMap = await ZenStorage.getDocStatsMap();
+      let changed = false;
+      for (const doc of this.documents) {
+        if (statsMap[doc.id]) {
+          if (doc.reviewCount !== statsMap[doc.id].reviewCount) {
+            doc.reviewCount = statsMap[doc.id].reviewCount;
+            changed = true;
+          }
+          if (statsMap[doc.id].lastReviewedAt && doc.lastReviewedAt !== statsMap[doc.id].lastReviewedAt) {
+            doc.lastReviewedAt = statsMap[doc.id].lastReviewedAt;
+            changed = true;
+          }
+        }
+      }
+      if (changed) {
+        this.applyFilterAndSort();
+      }
+    } catch (e) {
+      console.warn('[App] 로컬 통계 경량 갱신 실패:', e);
     }
   },
 
@@ -642,7 +697,15 @@ const App = {
       if (dashboardView) dashboardView.style.display = 'none';
       if (settingsView) settingsView.style.display = 'none';
       updateTabs(tabList);
-      this.loadDocuments(); // 목록 새로고침 (회독수 갱신 반영)
+
+      // [0ms 캐시 즉시 렌더링]: 이미 로드된 문서 목록이 있으면 스피너/네트워크 대기 없이 즉각 화면 표시
+      if (this.documents && this.documents.length > 0) {
+        this.updateStatusPillCounts();
+        this.applyFilterAndSort();
+        this.refreshLocalStatsOnly(); // 네트워크 없는 IndexedDB 회독수 경량 동기화
+      } else {
+        this.loadDocuments();
+      }
     }
   },
 
