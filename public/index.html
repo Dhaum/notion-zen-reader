@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>노션 지식 리더 (Zen Reader)</title>
+  <title>제2의 뉴런 (Zen Reader)</title>
   
   <!-- PWA 메타 태그 -->
   <link rel="manifest" href="/manifest.json">
@@ -11,12 +11,12 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="지식서재">
+  <meta name="apple-mobile-web-app-title" content="제2의 뉴런">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon.png">
 
-  <link rel="stylesheet" href="/css/app.css?v=20261108_v11">
+  <link rel="stylesheet" href="/css/app.css?v=20261108_v12">
 </head>
 <body class="theme-dark font-md">
 
@@ -28,7 +28,7 @@
     <div class="zen-header-left">
       <div class="zen-logo" onclick="App.showView('list')">
         <span>📖</span>
-        <span>지식 서재</span>
+        <span>제2의 뉴런</span>
       </div>
       <div id="network-status-badge" class="badge-status badge-online">
         ● 온라인
@@ -48,12 +48,12 @@
     
     <!-- 탭 네비게이션 (서재 / 대시보드 / 데이터 및 설정) -->
     <nav class="nav-tabs">
-      <button id="tab-btn-list" class="nav-tab-item active" onclick="App.showView('list')">📚 지식 서재</button>
+      <button id="tab-btn-list" class="nav-tab-item active" onclick="App.showView('list')">📚 서재</button>
       <button id="tab-btn-dashboard" class="nav-tab-item" onclick="App.showView('dashboard')">📊 학습 대시보드</button>
       <button id="tab-btn-settings" class="nav-tab-item" onclick="App.showView('settings')">⚙️ 데이터 및 설정</button>
     </nav>
 
-    <!-- 1. 지식 서재 (목록 뷰) -->
+    <!-- 1. 서재 (목록 뷰) -->
     <section id="view-list">
       <input type="text" class="doc-search-bar" placeholder="🔍 문서 제목, 태그, 카테고리 검색..." oninput="App.filterDocuments(this.value)">
       

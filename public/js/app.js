@@ -62,7 +62,7 @@ const App = {
         localStorage.setItem('zen_pin_code', enteredPin);
         document.getElementById('pin-modal').style.display = 'none';
         if (errorMsg) errorMsg.style.display = 'none';
-        this.showToast('🔓 인증 완료! 지식 서재에 오신 것을 환영합니다.');
+        this.showToast('🔓 인증 완료! 제2의 뉴런에 오신 것을 환영합니다.');
         this.loadDocuments();
       } else {
         if (errorMsg) {
@@ -190,7 +190,7 @@ const App = {
       this.deferredInstallPrompt = null;
       const installBtn = document.getElementById('btn-install-pwa');
       if (installBtn) installBtn.style.display = 'none';
-      this.showToast('🎉 지식 서재 웹앱이 태블릿에 성공적으로 설치되었습니다!');
+      this.showToast('🎉 제2의 뉴런 웹앱이 태블릿에 성공적으로 설치되었습니다!');
       console.log('[PWA] 웹앱 설치 완료');
     });
 
@@ -486,7 +486,7 @@ const App = {
 
     this.filteredDocuments.forEach(doc => {
       const lastDate = doc.lastReviewedAt ? new Date(doc.lastReviewedAt).toLocaleDateString() : '미학습';
-      const createdDate = doc.createdAt ? new Date(doc.createdAt).toLocaleDateString() : '';
+      const createdDate = this.formatShortDate(doc.createdAt);
 
       // 상태별 뱃지 스타일링
       const s = doc.status || '시작 전';
@@ -516,7 +516,7 @@ const App = {
             <span class="card-status-badge ${statusBadgeClass}" style="white-space: nowrap !important; flex-shrink: 0 !important; display: inline-flex !important; word-break: keep-all !important; line-height: 1.2 !important;">${this.escapeHtml(s)}</span>
           </div>
           <div class="doc-card-meta">
-            ${createdDate ? `<span style="color: var(--text-muted); font-size: 0.75rem;">📅 ${createdDate}</span>` : ''}
+            ${createdDate ? `<span style="color: var(--text-muted); font-size: 0.75rem;">${createdDate}</span>` : ''}
             ${(doc.tags || []).slice(0, 4).map(t => `<span class="doc-tag">#${this.escapeHtml(t)}</span>`).join(' ')}
             ${(doc.tags || []).length > 4 ? `<span style="font-size: 0.7rem; color: var(--text-muted);">+${doc.tags.length - 4}</span>` : ''}
             <span style="margin-left: auto;">${reviewBadge}</span>
@@ -786,6 +786,17 @@ const App = {
   escapeHtml(str) {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  },
+
+  // 작성일자 YY.MM.DD 포맷 (달력 이모지 제외, 1일은 01로 2자리 패딩)
+  formatShortDate(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '';
+    const yy = String(d.getFullYear()).slice(-2);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yy}.${mm}.${dd}`;
   }
 };
 

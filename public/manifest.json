@@ -1,7 +1,7 @@
 {
-  "name": "노션 지식 리더 (Notion Zen Reader)",
-  "short_name": "지식서재",
-  "description": "알도큐브 iPlay 60 mini pro 최적화 노션 지식 리더 및 학습 트래커",
+  "name": "제2의 뉴런 (Zen Reader)",
+  "short_name": "제2의 뉴런",
+  "description": "알도큐브 iPlay 60 mini pro 최적화 제2의 뉴런 리더 및 학습 트래커",
   "id": "/",
   "start_url": "/",
   "scope": "/",
