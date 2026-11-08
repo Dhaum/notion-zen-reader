@@ -112,6 +112,31 @@ Reader.executeCheckin('good').then(() => {
     assert.strictEqual(doc2.reviewCount, 3, 'IndexedDB 통계가 doc-2에 반영되어야 합니다.');
     assert.strictEqual(reFiltered, true, '통계 변경 시 화면이 재필터링되어야 합니다.');
     console.log('✅ [Test 4 PASS] refreshLocalStatsOnly 정상 결합 확인');
-    console.log('\n🎉 ALL TESTS PASSED! 모든 0ms 캐시 로직 무결성 검증 완료.');
+
+    // 5. Test filterByTag & toggle
+    console.log('🧪 [Test 5] 태그 터치 시 필터링 & 토글 해제 검증');
+    const freshAppCode = fs.readFileSync(path.join(__dirname, '../public/js/app.js'), 'utf-8');
+    eval(freshAppCode.replace('const App =', 'global.App ='));
+    App.documents = [
+      { id: 'd1', title: '아젤라산', tags: ['여드름', '주사', '미용', '색소침착'] },
+      { id: 'd2', title: '이소트레티노인', tags: ['여드름', '피지조절'] },
+      { id: 'd3', title: '메트포르민', tags: ['당뇨', '내분비'] }
+    ];
+    App.showToast = () => {};
+    App.renderDocumentList = () => {};
+
+    // First click: filter by '여드름'
+    App.filterByTag('여드름');
+    assert.strictEqual(App.searchQuery, '여드름', 'searchQuery가 여드름으로 설정되어야 합니다.');
+    assert.strictEqual(App.filteredDocuments.length, 2, '여드름 태그를 가진 문서는 2개여야 합니다.');
+    assert.ok(App.filteredDocuments.every(d => d.tags.includes('여드름')), '필터링된 모든 문서에 여드름 태그가 있어야 합니다.');
+
+    // Second click: toggle off
+    App.filterByTag('여드름');
+    assert.strictEqual(App.searchQuery, '', '동일 태그 재클릭 시 searchQuery가 비워져야 합니다.');
+    assert.strictEqual(App.filteredDocuments.length, 3, '필터 해제 시 전체 3개 문서가 보여야 합니다.');
+    console.log('✅ [Test 5 PASS] 태그 원터치 필터링 및 토글 해제 정상 작동 확인');
+
+    console.log('\n🎉 ALL TESTS PASSED! 모든 기능 무결성 검증 완료.');
   });
 });

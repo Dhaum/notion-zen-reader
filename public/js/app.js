@@ -438,9 +438,42 @@ const App = {
     this.applyFilterAndSort();
   },
 
+  // 태그 원터치 검색 및 토글 필터링
+  filterByTag(tag) {
+    if (!tag) return;
+    const cleanTag = tag.trim();
+    const searchInput = document.querySelector('.doc-search-bar');
+    const currentQ = (this.searchQuery || '').trim().replace(/^#/, '');
+
+    // 같은 태그 재터치 시 필터 해제 (토글)
+    if (currentQ.toLowerCase() === cleanTag.toLowerCase()) {
+      this.searchQuery = '';
+      if (searchInput) searchInput.value = '';
+      this.applyFilterAndSort();
+      this.showToast('🏷️ 태그 필터 해제 (전체 보기)');
+      return;
+    }
+
+    // 태그 검색 적용 & 전체 상태 필터로 자동 전환
+    this.searchQuery = cleanTag;
+    if (searchInput) searchInput.value = `#${cleanTag}`;
+    this.selectedStatus = 'all';
+    document.querySelectorAll('.status-pill').forEach(btn => {
+      if (btn.dataset.status === 'all') {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+    this.applyFilterAndSort();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    this.showToast(`🏷️ '#${cleanTag}' 태그 필터 적용 (${this.filteredDocuments.length}건)`);
+  },
+
   // 검색어, 상태 필터, 정렬 기준 종합 적용
   applyFilterAndSort() {
     const q = this.searchQuery.trim().toLowerCase();
+    const cleanQ = q.startsWith('#') ? q.slice(1).trim() : q;
 
     // 1) 검색어 및 상태 필터링
     let list = this.documents.filter(doc => {
@@ -459,10 +492,10 @@ const App = {
       }
 
       // 검색어 필터 검사
-      if (q) {
-        const matchTitle = doc.title.toLowerCase().includes(q);
-        const matchCategory = (doc.category || '').toLowerCase().includes(q);
-        const matchTags = (doc.tags || []).some(t => t.toLowerCase().includes(q));
+      if (cleanQ) {
+        const matchTitle = doc.title.toLowerCase().includes(cleanQ);
+        const matchCategory = (doc.category || '').toLowerCase().includes(cleanQ);
+        const matchTags = (doc.tags || []).some(t => t.toLowerCase().includes(cleanQ));
         if (!matchTitle && !matchCategory && !matchTags) return false;
       }
 
@@ -572,8 +605,12 @@ const App = {
           </div>
           <div class="doc-card-meta">
             ${createdDate ? `<span style="color: var(--text-muted); font-size: 0.75rem;">${createdDate}</span>` : ''}
-            ${(doc.tags || []).slice(0, 4).map(t => `<span class="doc-tag">#${this.escapeHtml(t)}</span>`).join(' ')}
-            ${(doc.tags || []).length > 4 ? `<span style="font-size: 0.7rem; color: var(--text-muted);">+${doc.tags.length - 4}</span>` : ''}
+            ${(doc.tags || []).slice(0, 10).map(t => {
+              const activeQuery = (this.searchQuery || '').trim().replace(/^#/, '').toLowerCase();
+              const isMatch = activeQuery && t.toLowerCase() === activeQuery;
+              return `<span class="doc-tag ${isMatch ? 'doc-tag-active' : ''}" data-tag="${this.escapeHtml(t)}" onclick="event.stopPropagation(); App.filterByTag(this.dataset.tag)">#${this.escapeHtml(t)}</span>`;
+            }).join(' ')}
+            ${(doc.tags || []).length > 10 ? `<span style="font-size: 0.7rem; color: var(--text-muted); padding: 2px 4px;">+${doc.tags.length - 10}</span>` : ''}
             <span style="margin-left: auto;">${reviewBadge}</span>
           </div>
         </div>
