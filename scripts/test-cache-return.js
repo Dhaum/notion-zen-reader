@@ -8,7 +8,8 @@ const mockElement = {
   classList: { add() {}, remove() {} },
   querySelectorAll: () => [],
   querySelector: () => null,
-  addEventListener: () => {}
+  addEventListener: () => {},
+  remove() {}
 };
 
 global.document = {
@@ -62,6 +63,7 @@ eval(readerCode.replace('const Reader =', 'global.Reader ='));
 assert.strictEqual(typeof App, 'object', 'App 객체가 로드되어야 합니다.');
 assert.strictEqual(typeof Reader, 'object', 'Reader 객체가 로드되어야 합니다.');
 assert.strictEqual(typeof App.refreshLocalStatsOnly, 'function', 'refreshLocalStatsOnly 메서드가 정의되어야 합니다.');
+const originalRenderDocumentList = App.renderDocumentList;
 
 console.log('✅ [Test 1 PASS] App & Reader 객체 정상 로드');
 
@@ -137,6 +139,98 @@ Reader.executeCheckin('good').then(() => {
     assert.strictEqual(App.filteredDocuments.length, 3, '필터 해제 시 전체 3개 문서가 보여야 합니다.');
     console.log('✅ [Test 5 PASS] 태그 원터치 필터링 및 토글 해제 정상 작동 확인');
 
-    console.log('\n🎉 ALL TESTS PASSED! 모든 기능 무결성 검증 완료.');
+    // 6. Test 시안 A 좌측 상태 인디케이터 클래스 및 오프라인 배지
+    console.log('🧪 [Test 6] 시안 A 상태 인디케이터 바 및 오프라인 배지 HTML 렌더링 검증');
+    App.renderDocumentList = originalRenderDocumentList;
+    let capturedListHtml = '';
+    mockElement.innerHTML = '';
+    Object.defineProperty(mockElement, 'innerHTML', {
+      set(val) { capturedListHtml = val; },
+      get() { return capturedListHtml; }
+    });
+
+    App.documents = [
+      { id: 'd-done', title: '완료문서', status: '완료', tags: ['피부'] },
+      { id: 'd-prog', title: '진행문서', status: '진행 중', tags: ['약학'] },
+      { id: 'd-todo', title: '시작전문서', status: '시작 전', tags: ['기초'] },
+      { id: 'd-upd', title: '수정문서', status: '완료', hasUpdate: true, tags: ['임상'] }
+    ];
+    App.offlineDocIds = new Set(['d-done', 'd-upd']);
+    App.filteredDocuments = [...App.documents];
+
+    App.renderDocumentList();
+
+    assert.ok(capturedListHtml.includes('card-status-완료'), '완료 문서에 card-status-완료 클래스가 있어야 합니다.');
+    assert.ok(capturedListHtml.includes('card-status-진행중'), '진행 중 문서에 card-status-진행중 클래스가 있어야 합니다.');
+    assert.ok(capturedListHtml.includes('card-status-시작전'), '시작 전 문서에 card-status-시작전 클래스가 있어야 합니다.');
+    assert.ok(capturedListHtml.includes('card-has-update'), 'hasUpdate 문서에 card-has-update 클래스가 있어야 합니다.');
+    assert.ok(capturedListHtml.includes('doc-offline-badge'), '오프라인 캐시 문서에 doc-offline-badge가 렌더링되어야 합니다.');
+    console.log('✅ [Test 6 PASS] 시안 A 클래스 및 오프라인 배지 렌더링 검증 완료');
+
+    // 7. Test 온디맨드 태그 바텀시트 빈도 계산
+    console.log('🧪 [Test 7] 온디맨드 태그 모아보기 빈도수 계산 검증');
+    let capturedTagChips = '';
+    const mockChipsContainer = {
+      set innerHTML(val) { capturedTagChips = val; },
+      get innerHTML() { return capturedTagChips; }
+    };
+    global.document.getElementById = (id) => {
+      if (id === 'tag-sheet-chips') return mockChipsContainer;
+      return mockElement;
+    };
+
+    App.documents = [
+      { id: '1', tags: ['여드름', '피부과'] },
+      { id: '2', tags: ['여드름', '비만'] },
+      { id: '3', tags: ['여드름', '피부과', '비만'] },
+      { id: '4', tags: ['당뇨'] }
+    ];
+
+    App.renderTagSheet();
+    assert.ok(capturedTagChips.includes('#여드름'), '여드름 태그가 시트에 렌더링되어야 합니다.');
+    assert.ok(capturedTagChips.includes('>3<'), '여드름 태그 빈도수 3이 표시되어야 합니다.');
+    assert.ok(capturedTagChips.includes('>2<'), '피부과 및 비만 빈도수 2가 표시되어야 합니다.');
+    assert.ok(capturedTagChips.includes('>1<'), '당뇨 빈도수 1이 표시되어야 합니다.');
+    console.log('✅ [Test 7 PASS] 태그 빈도수 자동 취합 및 바텀시트 칩 렌더링 검증 완료');
+
+    // 8. Test Reader.goBack 및 마이크로 목차(TOC) 헤딩 수집
+    console.log('🧪 [Test 8] Reader.goBack 및 마이크로 목차(TOC) 헤딩 추출 검증');
+    let historyBackCalled = false;
+    let showViewListCalled = false;
+
+    global.history = {
+      length: 2,
+      state: { view: 'reader', docId: 'test-doc' },
+      back: () => { historyBackCalled = true; },
+      pushState: () => {}
+    };
+
+    Reader.goBack();
+    assert.strictEqual(historyBackCalled, true, 'reader 뷰에서는 history.back()이 호출되어야 합니다.');
+
+    // fallback when history stack is 1
+    global.history.length = 1;
+    App.showView = (v) => { if (v === 'list') showViewListCalled = true; };
+    Reader.goBack();
+    assert.strictEqual(showViewListCalled, true, '히스토리 스택이 없을 때는 App.showView("list")로 fallback해야 합니다.');
+
+    // Test headings extraction
+    Reader.headingsList = [];
+    Reader.headingCounter = 0;
+    const testBlocks = [
+      { type: 'heading_1', text: '1. 서론' },
+      { type: 'paragraph', text: '본문 내용' },
+      { type: 'heading_2', text: '2. 약물 기전' },
+      { type: 'heading_3', text: '2-1. 수용체 결합' }
+    ];
+    Reader.renderBlocks(testBlocks);
+
+    assert.strictEqual(Reader.headingsList.length, 3, '3개의 헤딩이 목차 목록에 수집되어야 합니다.');
+    assert.strictEqual(Reader.headingsList[0].text, '1. 서론');
+    assert.strictEqual(Reader.headingsList[1].text, '2. 약물 기전');
+    assert.strictEqual(Reader.headingsList[2].text, '2-1. 수용체 결합');
+    console.log('✅ [Test 8 PASS] Reader.goBack 히스토리 라우팅 및 TOC 헤딩 수집 검증 완료');
+
+    console.log('\n🎉 ALL 8 TESTS PASSED! 모든 기능 무결성 검증 완료.');
   });
 });

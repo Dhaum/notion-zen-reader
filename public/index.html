@@ -16,7 +16,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon.png">
 
-  <link rel="stylesheet" href="/css/app.css?v=20261108_v14">
+  <link rel="stylesheet" href="/css/app.css?v=20261108_v15">
 </head>
 <body class="theme-dark font-md">
 
@@ -55,7 +55,14 @@
 
     <!-- 1. 서재 (목록 뷰) -->
     <section id="view-list">
-      <input type="text" id="doc-search-input" class="doc-search-bar" placeholder="🔍 문서 제목, 태그, 카테고리 검색..." oninput="App.filterDocuments(this.value)">
+      <!-- 검색창 및 온디맨드 태그 모아보기 버튼 바 -->
+      <div class="search-and-tag-bar">
+        <input type="text" id="doc-search-input" class="doc-search-bar" placeholder="🔍 문서 제목, 태그, 카테고리 검색..." oninput="App.filterDocuments(this.value)">
+        <button id="btn-toggle-tag-sheet" class="btn btn-tag-toggle" onclick="App.toggleTagSheet()" title="주요 임상 태그 모아보기">
+          <span>🏷️</span>
+          <span class="btn-tag-text">태그</span>
+        </button>
+      </div>
       
       <!-- 상태 필터 & 생성 시각 정렬 컨트롤 -->
       <div class="filter-controls-row">
@@ -116,7 +123,7 @@
 
   <!-- 8.4인치 태블릿 알도큐브 내추럴 썸 존 슬림 플로팅 아일랜드 독 -->
   <aside id="zen-floating-dock" class="zen-floating-dock" style="display: none;">
-    <button class="dock-btn dock-btn-subtle" onclick="App.showView('list')" title="서재 목록으로 돌아가기">
+    <button class="dock-btn dock-btn-subtle" onclick="Reader.goBack()" title="서재 목록으로 돌아가기">
       <span class="dock-icon">◀</span>
       <span class="dock-label">서재</span>
     </button>
@@ -137,6 +144,21 @@
     </button>
   </aside>
 
+  <!-- 온디맨드 주요 태그 모아보기 바텀시트 -->
+  <div id="tag-sheet-backdrop" class="sheet-backdrop" onclick="App.toggleTagSheet(false)" style="display: none;"></div>
+  <div id="tag-sheet" class="bottom-sheet" style="display: none;">
+    <div class="sheet-handle-bar">
+      <div class="sheet-handle"></div>
+    </div>
+    <div class="sheet-header">
+      <div class="sheet-title">🏷️ 주요 임상 태그 모아보기</div>
+      <button class="sheet-close-btn" onclick="App.toggleTagSheet(false)" title="닫기">✕</button>
+    </div>
+    <div id="tag-sheet-chips" class="tag-sheet-grid">
+      <!-- 자바스크립트로 Top 25+ 태그 및 빈도수 렌더링 -->
+    </div>
+  </div>
+
   <!-- PIN 번호 보안 잠금 모달 -->
   <div id="pin-modal" class="modal-overlay" style="display: none;">
     <div class="modal-box">
@@ -156,11 +178,11 @@
   </div>
 
   <!-- 스크립트 로딩 -->
-  <script src="/js/storage-idb.js?v=20261108_v14"></script>
-  <script src="/js/offline.js?v=20261108_v14"></script>
-  <script src="/js/reader.js?v=20261108_v14"></script>
-  <script src="/js/dashboard.js?v=20261108_v14"></script>
-  <script src="/js/settings.js?v=20261108_v14"></script>
-  <script src="/js/app.js?v=20261108_v14"></script>
+  <script src="/js/storage-idb.js?v=20261108_v15"></script>
+  <script src="/js/offline.js?v=20261108_v15"></script>
+  <script src="/js/reader.js?v=20261108_v15"></script>
+  <script src="/js/dashboard.js?v=20261108_v15"></script>
+  <script src="/js/settings.js?v=20261108_v15"></script>
+  <script src="/js/app.js?v=20261108_v15"></script>
 </body>
 </html>

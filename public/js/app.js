@@ -7,6 +7,8 @@ const App = {
   sortOrder: 'created_desc',  // 'created_desc' | 'created_asc' | 'updated_desc' | 'title_asc'
   searchQuery: '',
   deferredInstallPrompt: null,
+  offlineDocIds: new Set(),
+  isTagSheetOpen: false,
 
   init() {
     this.initSecurity();
@@ -16,7 +18,86 @@ const App = {
       ZenStorage.init().catch(console.warn);
     }
     OfflineManager.init();
+    this.initHistory();
+    this.setupScrollCompression();
+    this.refreshOfflineDocIds();
     this.loadDocuments();
+  },
+
+  // HTML5 History API 연동 & 태블릿 시스템 제스처 뒤로가기 시 바탕화면 튕김 원천 차단
+  initHistory() {
+    if (typeof history !== 'undefined' && history.replaceState) {
+      history.replaceState({ view: 'list' }, '', window.location.pathname);
+    }
+    this.setupPopstateListener();
+  },
+
+  setupPopstateListener() {
+    window.addEventListener('popstate', (e) => {
+      const state = e.state;
+      // 태그 바텀시트가 열려있다면 바텀시트부터 닫기
+      if (this.isTagSheetOpen) {
+        this.toggleTagSheet(false);
+      }
+
+      if (state && state.view === 'reader' && state.docId) {
+        if (typeof Reader !== 'undefined') {
+          Reader.open(state.docId, false);
+        }
+      } else if (state && state.view === 'dashboard') {
+        this.showView('dashboard', false);
+      } else if (state && state.view === 'settings') {
+        this.showView('settings', false);
+      } else {
+        // 기본값: 서재 목록
+        this.showView('list', false);
+      }
+    });
+  },
+
+  // 8.4인치 태블릿 세로 모드 최적화: 스크롤 다운 시 상단 크롬 스마트 압축
+  setupScrollCompression() {
+    window.addEventListener('scroll', () => {
+      if (this.currentView !== 'list') return;
+      const y = window.scrollY;
+      const listView = document.getElementById('view-list');
+      if (!listView) return;
+
+      if (y > 90) {
+        listView.classList.add('chrome-compressed');
+      } else if (y < 40) {
+        listView.classList.remove('chrome-compressed');
+      }
+    }, { passive: true });
+  },
+
+  // 오프라인 저장된 본문 캐시 문서 ID Set 조회
+  async refreshOfflineDocIds() {
+    if (typeof caches === 'undefined') return;
+    try {
+      const cacheNames = await caches.keys();
+      const idSet = new Set();
+      for (const name of cacheNames) {
+        if (name.startsWith('zen-reader') || name.startsWith('zen-cache')) {
+          const cache = await caches.open(name);
+          const requests = await cache.keys();
+          for (const req of requests) {
+            const url = req.url || '';
+            const match = url.match(/\/api\/documents\/([a-zA-Z0-9_-]+)/);
+            if (match && match[1] && match[1] !== 'undefined') {
+              idSet.add(match[1]);
+            }
+          }
+        }
+      }
+      this.offlineDocIds = idSet;
+      // 이미 서재 화면이 렌더링된 상태라면 오프라인 배지 반영
+      if (this.currentView === 'list' && this.documents && this.documents.length > 0) {
+        this.renderDocumentList();
+      }
+    } catch (e) {
+      console.warn('[App] 오프라인 캐시 ID 목록 조회 실패:', e);
+    }
   },
 
   // 1. PIN 보안 인증 게이트
@@ -576,26 +657,36 @@ const App = {
       const lastDate = doc.lastReviewedAt ? new Date(doc.lastReviewedAt).toLocaleDateString() : '미학습';
       const createdDate = this.formatShortDate(doc.createdAt);
 
-      // 상태별 뱃지 스타일링
+      // 상태별 뱃지 & 시안 A 좌측 상태 인디케이터 클래스
       const s = doc.status || '시작 전';
       let statusBadgeClass = 'badge-status-시작전';
+      let cardStatusClass = 'card-status-시작전';
       if (s.includes('완료') || s.includes('Done') || s.includes('Complete')) {
         statusBadgeClass = 'badge-status-완료';
+        cardStatusClass = 'card-status-완료';
       } else if (s.includes('진행') || s.includes('Progress')) {
         statusBadgeClass = 'badge-status-진행중';
+        cardStatusClass = 'card-status-진행중';
       }
 
       const reviewBadge = doc.reviewCount > 0
         ? `<span class="doc-review-badge">🏆 ${doc.reviewCount}회독</span>`
         : `<span style="font-size: 0.75rem; color: var(--text-muted);">미학습</span>`;
 
-      // 노션 수정 감지 뱃지
+      // 노션 수정 감지 뱃지 및 인디케이터 클래스
       const updatedBadge = doc.hasUpdate
         ? `<span class="badge-doc-updated" title="노션에서 최신 내용으로 수정되었습니다. (클릭 시 즉시 열람 및 최신 반영)">✨ 수정됨</span>`
         : '';
+      const updateClass = doc.hasUpdate ? 'card-has-update' : '';
+
+      // 오프라인 저장 완료 인디케이터 배지
+      const isOfflineCached = this.offlineDocIds && this.offlineDocIds.has(doc.id);
+      const offlineBadge = isOfflineCached
+        ? `<span class="doc-offline-badge" title="로컬 저장소에 본문이 다운로드되어 완전 오프라인 열람 가능">💾 오프라인</span>`
+        : '';
 
       html += `
-        <div class="doc-card" onclick="Reader.open('${doc.id}')">
+        <div class="doc-card ${cardStatusClass} ${updateClass}" onclick="Reader.open('${doc.id}')">
           <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px;">
             <div class="doc-card-title" style="margin-bottom: 0; flex: 1 1 auto; min-width: 0; word-break: keep-all; overflow-wrap: break-word;">
               ${this.escapeHtml(doc.title)}
@@ -604,6 +695,7 @@ const App = {
             <span class="card-status-badge ${statusBadgeClass}" style="white-space: nowrap !important; flex-shrink: 0 !important; display: inline-flex !important; word-break: keep-all !important; line-height: 1.2 !important;">${this.escapeHtml(s)}</span>
           </div>
           <div class="doc-card-meta">
+            ${offlineBadge}
             ${createdDate ? `<span style="color: var(--text-muted); font-size: 0.75rem;">${createdDate}</span>` : ''}
             ${(doc.tags || []).slice(0, 10).map(t => {
               const activeQuery = (this.searchQuery || '').trim().replace(/^#/, '').toLowerCase();
@@ -683,7 +775,20 @@ const App = {
   },
 
   // 5. 뷰 전환 제어 (서재 / 대시보드 / 설정 / 리더)
-  showView(viewName) {
+  showView(viewName, pushHistory = true) {
+    if (pushHistory && typeof history !== 'undefined' && history.pushState) {
+      const currentState = history.state;
+      if (!currentState || currentState.view !== viewName) {
+        const url = viewName === 'list' ? window.location.pathname : `#${viewName}`;
+        history.pushState({ view: viewName }, '', url);
+      }
+    }
+
+    // 태그 바텀시트가 열려있다면 뷰 전환 시 자동 닫기
+    if (this.isTagSheetOpen) {
+      this.toggleTagSheet(false);
+    }
+
     this.currentView = viewName;
     const listView = document.getElementById('view-list');
     const readerView = document.getElementById('view-reader');
@@ -744,6 +849,82 @@ const App = {
         this.loadDocuments();
       }
     }
+  },
+
+  // 온디맨드 주요 임상 태그 모아보기 바텀시트 제어
+  toggleTagSheet(forceState) {
+    const backdrop = document.getElementById('tag-sheet-backdrop');
+    const sheet = document.getElementById('tag-sheet');
+    if (!sheet || !backdrop) return;
+
+    const shouldOpen = typeof forceState === 'boolean' ? forceState : !sheet.classList.contains('open');
+
+    if (shouldOpen) {
+      this.renderTagSheet();
+      backdrop.style.display = 'block';
+      sheet.style.display = 'flex';
+      requestAnimationFrame(() => {
+        backdrop.classList.add('open');
+        sheet.classList.add('open');
+      });
+      this.isTagSheetOpen = true;
+    } else {
+      backdrop.classList.remove('open');
+      sheet.classList.remove('open');
+      this.isTagSheetOpen = false;
+      setTimeout(() => {
+        if (!this.isTagSheetOpen) {
+          backdrop.style.display = 'none';
+          sheet.style.display = 'none';
+        }
+      }, 280);
+    }
+  },
+
+  // 전체 문서 태그 빈도 계산 및 바텀시트 칩 렌더링
+  renderTagSheet() {
+    const container = document.getElementById('tag-sheet-chips');
+    if (!container) return;
+
+    const tagCounts = {};
+    (this.documents || []).forEach(doc => {
+      (doc.tags || []).forEach(t => {
+        if (!t) return;
+        const clean = t.trim().replace(/^#/, '');
+        if (clean) {
+          tagCounts[clean] = (tagCounts[clean] || 0) + 1;
+        }
+      });
+    });
+
+    const sortedTags = Object.entries(tagCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 36); // Top 36개 주요 임상 태그
+
+    if (sortedTags.length === 0) {
+      container.innerHTML = '<div style="padding: 24px; color: var(--text-muted); text-align: center; width: 100%;">등록된 태그가 없습니다.</div>';
+      return;
+    }
+
+    const currentQ = (this.searchQuery || '').trim().replace(/^#/, '').toLowerCase();
+
+    let html = '';
+    sortedTags.forEach(([tag, count]) => {
+      const isActive = currentQ && currentQ === tag.toLowerCase();
+      html += `
+        <button class="tag-sheet-chip ${isActive ? 'active' : ''}" onclick="App.selectTagFromSheet('${this.escapeHtml(tag)}')">
+          <span>#${this.escapeHtml(tag)}</span>
+          <span class="tag-sheet-count">${count}</span>
+        </button>
+      `;
+    });
+
+    container.innerHTML = html;
+  },
+
+  selectTagFromSheet(tag) {
+    this.toggleTagSheet(false);
+    this.filterByTag(tag);
   },
 
   // 140개 전 문서 오프라인 일괄 사전 캐싱 (350ms Pacing + 429 지수 백오프 재시도 + 세련된 진행률)
@@ -858,8 +1039,10 @@ const App = {
     }
 
     if (failCount === 0) {
+      await this.refreshOfflineDocIds();
       this.showToast(`🎉 총 ${successCount}개 문서 오프라인 저장 완료! 이제 인터넷 없이도 모든 문서를 읽을 수 있습니다.`);
     } else {
+      await this.refreshOfflineDocIds();
       this.showToast(`⚠️ 오프라인 캐싱 완료: 성공 ${successCount}개 / 실패 ${failCount}개 (인터넷 없이 열람 가능)`);
     }
   },

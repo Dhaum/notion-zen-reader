@@ -8,9 +8,30 @@ const Reader = {
   lastScrollY: 0,
   scrollThreshold: 15,
   isAllTogglesExpanded: false,
+  headingsList: [],
+  headingCounter: 0,
+  touchStartX: 0,
+  touchStartY: 0,
+  touchStartTime: 0,
+  swipeHandlerAttached: false,
 
-  async open(docId) {
-    App.showView('reader');
+  // 통합 뒤로가기 핸들러 (History API 스택 감지하여 바탕화면 튕김 차단)
+  goBack() {
+    if (typeof history !== 'undefined' && history.length > 1 && history.state?.view === 'reader') {
+      history.back();
+    } else if (typeof App !== 'undefined') {
+      App.showView('list');
+    }
+  },
+
+  async open(docId, pushHistory = true) {
+    if (typeof App !== 'undefined') {
+      App.showView('reader', false);
+    }
+    if (pushHistory && typeof history !== 'undefined' && history.pushState) {
+      history.pushState({ view: 'reader', docId }, '', `#read/${docId}`);
+    }
+
     const container = document.getElementById('reader-content');
     if (!container) return;
     container.innerHTML = '<div style="text-align: center; padding: 60px 0; color: var(--text-muted);">문서를 불러오는 중입니다...</div>';
@@ -20,6 +41,8 @@ const Reader = {
     this.readingStartTime = Date.now();
     this.durationSeconds = 0;
     this.isAllTogglesExpanded = false;
+    this.headingsList = [];
+    this.headingCounter = 0;
     if (this.readingTimer) clearInterval(this.readingTimer);
     this.readingTimer = setInterval(() => {
       this.durationSeconds++;
@@ -73,6 +96,8 @@ const Reader = {
       }
 
       this.render(this.currentDoc);
+      this.renderTocRail();
+      this.setupSwipeToBack();
       this.setupSmartScroll();
       window.scrollTo(0, 0);
     } catch (err) {
@@ -80,7 +105,7 @@ const Reader = {
         <div style="text-align: center; padding: 40px; color: var(--danger);">
           <h3>문서를 불러올 수 없습니다</h3>
           <p style="margin: 10px 0; color: var(--text-muted); font-size: 0.88rem;">${err.message}</p>
-          <button class="btn" onclick="App.showView('list')">← 서재로 돌아가기</button>
+          <button class="btn" onclick="Reader.goBack()">← 서재로 돌아가기</button>
         </div>
       `;
       this.showFloatingDock(false);
@@ -228,7 +253,7 @@ const Reader = {
     let html = `
       <div class="reader-header">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 8px;">
-          <button class="btn btn-icon" onclick="App.showView('list')">← 서재 목록</button>
+          <button class="btn btn-icon" onclick="Reader.goBack()" title="서재 목록으로 돌아가기">← 서재 목록</button>
           <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
             <button id="btn-reader-pinpoint-refresh" class="btn btn-icon" onclick="Reader.refreshCurrentDoc()" title="노션 실시간 최신 내용 새로고침 (0.4초)">
               🔄 <span style="font-size: 0.75rem; font-weight: 600; margin-left: 2px;">실시간 갱신</span>
@@ -340,17 +365,28 @@ const Reader = {
         case 'heading_2':
         case 'heading_3':
           const hTag = b.type === 'heading_1' ? 'h1' : (b.type === 'heading_2' ? 'h2' : 'h3');
+          const headingIdx = ++this.headingCounter;
+          const headingId = `zen-heading-${headingIdx}`;
+          const plainHeadingText = (b.text || '').trim();
+          if (plainHeadingText) {
+            this.headingsList.push({
+              id: headingId,
+              text: plainHeadingText,
+              tag: hTag
+            });
+          }
+
           if (b.isToggleable && b.children && b.children.length > 0) {
             out += `
               <details class="zen-toggle zen-heading-toggle">
-                <summary><${hTag} style="display: inline; margin: 0;">${contentHtml}</${hTag}></summary>
+                <summary><${hTag} id="${headingId}" style="display: inline; margin: 0;">${contentHtml}</${hTag}></summary>
                 <div class="zen-toggle-content">
                   ${this.renderBlocks(b.children)}
                 </div>
               </details>
             `;
           } else {
-            out += `<${hTag}>${contentHtml}</${hTag}>`;
+            out += `<${hTag} id="${headingId}">${contentHtml}</${hTag}>`;
             if (b.children && b.children.length > 0) {
               out += this.renderBlocks(b.children);
             }
@@ -492,7 +528,7 @@ const Reader = {
     return out;
   },
 
-  // 스마트 스크롤: 헤더 자동 숨김 & 앰비언트 진행률 바
+  // 스마트 스크롤: 헤더 자동 숨김 & 앰비언트 진행률 바 & 마이크로 목차 스크롤 스파이
   setupSmartScroll() {
     this.lastScrollY = window.scrollY;
     const header = document.querySelector('.zen-header');
@@ -515,7 +551,107 @@ const Reader = {
         }
         this.lastScrollY = currentY;
       }
+
+      // 3) 마이크로 목차 레일 스크롤 스파이 (현재 보고 있는 섹션 도트 하이라이트)
+      if (this.headingsList && this.headingsList.length >= 2) {
+        const scrollThreshold = currentY + 140;
+        let activeIdx = 0;
+        for (let i = 0; i < this.headingsList.length; i++) {
+          const el = document.getElementById(this.headingsList[i].id);
+          if (el && el.getBoundingClientRect().top + window.scrollY <= scrollThreshold) {
+            activeIdx = i;
+          }
+        }
+        const dots = document.querySelectorAll('#zen-toc-rail .zen-toc-dot');
+        dots.forEach((dot, idx) => {
+          if (idx === activeIdx) dot.classList.add('active');
+          else dot.classList.remove('active');
+        });
+      }
     };
+  },
+
+  // 긴 임상 매뉴얼용 마이크로 목차 레일 렌더링 (헤딩 2개 이상일 때만 노출)
+  renderTocRail() {
+    const existing = document.getElementById('zen-toc-rail');
+    if (existing && existing.remove) existing.remove();
+
+    if (!this.headingsList || this.headingsList.length < 2) return;
+
+    const rail = document.createElement('div');
+    rail.id = 'zen-toc-rail';
+    rail.className = 'zen-toc-rail';
+
+    this.headingsList.forEach((h, idx) => {
+      const dot = document.createElement('div');
+      dot.className = `zen-toc-dot dot-${h.tag} ${idx === 0 ? 'active' : ''}`;
+      dot.dataset.targetId = h.id;
+
+      const tooltip = document.createElement('div');
+      tooltip.className = 'zen-toc-tooltip';
+      tooltip.innerText = h.text;
+      dot.appendChild(tooltip);
+
+      dot.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const target = document.getElementById(h.id);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+
+      rail.appendChild(dot);
+    });
+
+    document.body.appendChild(rail);
+  },
+
+  // 인앱 가장자리 스와이프 뒤로가기 제스처 (좌측 및 우측 베젤 스와이프 지원)
+  setupSwipeToBack() {
+    if (this.swipeHandlerAttached) return;
+
+    this.handleTouchStart = (e) => {
+      if (!e.touches || e.touches.length !== 1) return;
+      this.touchStartX = e.touches[0].clientX;
+      this.touchStartY = e.touches[0].clientY;
+      this.touchStartTime = Date.now();
+    };
+
+    this.handleTouchEnd = (e) => {
+      if (!e.changedTouches || e.changedTouches.length !== 1) return;
+      const endX = e.changedTouches[0].clientX;
+      const endY = e.changedTouches[0].clientY;
+      const deltaX = endX - this.touchStartX;
+      const deltaY = endY - this.touchStartY;
+      const elapsed = Date.now() - this.touchStartTime;
+
+      if (elapsed > 550) return; // 너무 느린 드래그 제외
+
+      const winWidth = window.innerWidth;
+      const isHorizontal = Math.abs(deltaX) > Math.abs(deltaY) * 1.5;
+
+      // 1) 좌측 가장자리에서 오른쪽으로 스와이프 (표준 뒤로가기)
+      const isLeftEdgeSwipe = this.touchStartX < 50 && deltaX > 75;
+
+      // 2) 우측 가장자리에서 왼쪽으로 스와이프 (사용자가 설정한 태블릿 우측 제스처)
+      const isRightEdgeSwipe = this.touchStartX > (winWidth - 50) && deltaX < -75;
+
+      if (isHorizontal && (isLeftEdgeSwipe || isRightEdgeSwipe)) {
+        this.goBack();
+      }
+    };
+
+    window.addEventListener('touchstart', this.handleTouchStart, { passive: true });
+    window.addEventListener('touchend', this.handleTouchEnd, { passive: true });
+    this.swipeHandlerAttached = true;
+  },
+
+  removeSwipeToBack() {
+    if (this.swipeHandlerAttached) {
+      window.removeEventListener('touchstart', this.handleTouchStart);
+      window.removeEventListener('touchend', this.handleTouchEnd);
+      this.swipeHandlerAttached = false;
+    }
   },
 
   // 수동 체크인 버튼 클릭 시 (체감 난이도 피드백 포함)
@@ -605,6 +741,9 @@ const Reader = {
   cleanup() {
     if (this.readingTimer) clearInterval(this.readingTimer);
     window.onscroll = null;
+    this.removeSwipeToBack();
+    const rail = document.getElementById('zen-toc-rail');
+    if (rail && rail.remove) rail.remove();
     const header = document.querySelector('.zen-header');
     if (header) header.classList.remove('header-hidden');
     const bar = document.getElementById('reading-progress-bar');

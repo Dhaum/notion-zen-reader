@@ -245,6 +245,52 @@ body {
 }
 
 /* 문서 카드 목록 (서재 뷰) */
+/* 검색창 및 태그 모아보기 버튼 바 */
+.search-and-tag-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  transition: margin-bottom 0.25s ease;
+}
+
+.search-and-tag-bar .doc-search-bar {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.btn-tag-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-tag-toggle:hover {
+  background-color: var(--bg-card-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-tag-toggle:active {
+  transform: scale(0.96);
+}
+
+.btn-tag-toggle .btn-tag-text {
+  font-size: 0.82rem;
+}
+
 .doc-search-bar {
   width: 100%;
   padding: 12px 16px;
@@ -255,6 +301,7 @@ body {
   font-size: 0.95rem;
   margin-bottom: 16px;
   outline: none;
+  transition: all 0.2s ease;
 }
 
 .doc-search-bar:focus {
@@ -267,20 +314,81 @@ body {
   gap: 12px;
 }
 
+/* [시안 A] 좌측 4.5px 상태 인디케이터 바 카드 */
 .doc-card {
-  padding: 18px 20px;
+  padding: 18px 20px 18px 24px;
   border-radius: 12px;
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
+  overflow: hidden;
+}
+
+.doc-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4.5px;
+  background-color: rgba(148, 163, 184, 0.4); /* 기본 시작 전 */
+  transition: all 0.25s ease;
+}
+
+.doc-card.card-status-완료::before {
+  background-color: #10b981; /* 에메랄드 */
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.45);
+}
+
+.doc-card.card-status-진행중::before {
+  background-color: var(--accent); /* 스카이 블루 */
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.45);
+}
+
+.doc-card.card-status-시작전::before {
+  background-color: rgba(148, 163, 184, 0.35); /* 슬레이트 그레이 */
+}
+
+/* 노션에서 수정된 문서: 골드/핑크 그라디언트 펄스 글로우 */
+.doc-card.card-has-update::before {
+  background: linear-gradient(180deg, #f59e0b, #ec4899);
+  width: 5.5px;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.7);
+  animation: pulseCardGlow 2s infinite ease-in-out;
+}
+
+@keyframes pulseCardGlow {
+  0%, 100% {
+    opacity: 0.85;
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.35);
+  }
 }
 
 .doc-card:hover {
   background-color: var(--bg-card-hover);
   border-color: var(--accent);
   transform: translateY(-1px);
+}
+
+/* 오프라인 저장 완료 인디케이터 배지 */
+.doc-offline-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background-color: rgba(14, 165, 233, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(14, 165, 233, 0.28);
+  white-space: nowrap;
 }
 
 .doc-card-title {
@@ -774,7 +882,7 @@ body.theme-sepia .notion-color-red { color: #b91c1c; }
 .notion-color-red_background { background-color: rgba(255, 0, 26, 0.25); padding: 2px 5px; border-radius: 4px; }
 
 /* ============================================================
-   상태(Status) 필터 바 및 정렬(Sort) 셀렉터 컨트롤
+   상태(Status) 필터 바 및 정렬(Sort) 셀렉터 컨트롤 (스마트 압축 지원)
    ============================================================ */
 .filter-controls-row {
   display: flex;
@@ -783,6 +891,22 @@ body.theme-sepia .notion-color-red { color: #b91c1c; }
   gap: 10px;
   margin-bottom: 16px;
   flex-wrap: wrap;
+  max-height: 120px;
+  opacity: 1;
+  overflow: hidden;
+  transition: max-height 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, margin-bottom 0.28s ease;
+}
+
+/* 8.4인치 태블릿 세로 모드 스마트 크롬 압축 */
+#view-list.chrome-compressed .filter-controls-row {
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: 0 !important;
+  pointer-events: none;
+}
+
+#view-list.chrome-compressed .search-and-tag-bar {
+  margin-bottom: 8px;
 }
 
 .status-filter-pills {
@@ -1888,4 +2012,227 @@ body.theme-sepia .notion-color-red { color: #b91c1c; }
 
 .w-full {
   width: 100%;
+}
+
+/* ============================================================
+   온디맨드 주요 임상 태그 모아보기 바텀시트 (Bottom Sheet)
+   ============================================================ */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.sheet-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.bottom-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 75vh;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-color);
+  border-radius: 20px 20px 0 0;
+  z-index: 1001;
+  padding: 10px 18px 28px;
+  box-shadow: 0 -10px 35px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  transform: translateY(105%);
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.bottom-sheet.open {
+  transform: translateY(0);
+}
+
+.sheet-handle-bar {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 10px;
+}
+
+.sheet-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--text-muted);
+  opacity: 0.45;
+}
+
+.sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 14px;
+}
+
+.sheet-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.sheet-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.sheet-close-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+
+.tag-sheet-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  overflow-y: auto;
+  max-height: calc(75vh - 95px);
+  padding-bottom: 24px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tag-sheet-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tag-sheet-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.tag-sheet-chip:active {
+  transform: scale(0.96);
+}
+
+.tag-sheet-chip.active {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  border-color: var(--accent) !important;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.45);
+}
+
+.tag-sheet-count {
+  font-size: 0.72rem;
+  opacity: 0.75;
+  background: rgba(255, 255, 255, 0.12);
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+/* ============================================================
+   리더 뷰 마이크로 목차 레일 (TOC Scrubber)
+   8.4인치 태블릿 우측 썸 존 최적화
+   ============================================================ */
+.zen-toc-rail {
+  position: fixed;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 5px;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  z-index: 85;
+  touch-action: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.zen-toc-dot {
+  position: relative;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(148, 163, 184, 0.4);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.zen-toc-dot.dot-h1 {
+  width: 9px;
+  height: 9px;
+  background: rgba(148, 163, 184, 0.65);
+}
+
+.zen-toc-dot.dot-h3 {
+  width: 5px;
+  height: 5px;
+  background: rgba(148, 163, 184, 0.3);
+}
+
+.zen-toc-dot:hover,
+.zen-toc-dot.active {
+  background: var(--accent);
+  transform: scale(1.4);
+  box-shadow: 0 0 10px var(--accent);
+}
+
+.zen-toc-tooltip {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 5px 11px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  display: none;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 90;
+}
+
+.zen-toc-dot:hover .zen-toc-tooltip {
+  display: block;
 }
