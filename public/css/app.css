@@ -399,13 +399,32 @@ body {
   line-height: 1.4;
 }
 
+/* 카드 상단 우측 뱃지 그룹 (회독수 + 상태 단일 행 고정) */
+.doc-card-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* 카드 하단 메타 바: 절대 2줄로 늘어지지 않는 단일 행 슬림 뷰 */
 .doc-card-meta {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 0.8rem;
+  gap: 6px;
+  font-size: 0.78rem;
   color: var(--text-muted);
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 1px;
+}
+
+.doc-card-meta::-webkit-scrollbar {
+  display: none;
 }
 
 .doc-tag {

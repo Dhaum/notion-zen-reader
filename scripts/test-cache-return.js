@@ -139,9 +139,10 @@ Reader.executeCheckin('good').then(() => {
     assert.strictEqual(App.filteredDocuments.length, 3, '필터 해제 시 전체 3개 문서가 보여야 합니다.');
     console.log('✅ [Test 5 PASS] 태그 원터치 필터링 및 토글 해제 정상 작동 확인');
 
-    // 6. Test 시안 A 좌측 상태 인디케이터 클래스 및 오프라인 배지
-    console.log('🧪 [Test 6] 시안 A 상태 인디케이터 바 및 오프라인 배지 HTML 렌더링 검증');
-    App.renderDocumentList = originalRenderDocumentList;
+    // 6. Test 시안 A 좌측 상태 인디케이터 클래스 및 상단 회독수 뱃지 고정 렌더링
+    console.log('🧪 [Test 6] 시안 A 상태 인디케이터 바 및 상단 뱃지 그룹 렌더링 검증');
+    const updatedAppCode = fs.readFileSync(path.join(__dirname, '../public/js/app.js'), 'utf-8');
+    eval(updatedAppCode.replace('const App =', 'global.App ='));
     let capturedListHtml = '';
     mockElement.innerHTML = '';
     Object.defineProperty(mockElement, 'innerHTML', {
@@ -150,12 +151,11 @@ Reader.executeCheckin('good').then(() => {
     });
 
     App.documents = [
-      { id: 'd-done', title: '완료문서', status: '완료', tags: ['피부'] },
-      { id: 'd-prog', title: '진행문서', status: '진행 중', tags: ['약학'] },
-      { id: 'd-todo', title: '시작전문서', status: '시작 전', tags: ['기초'] },
-      { id: 'd-upd', title: '수정문서', status: '완료', hasUpdate: true, tags: ['임상'] }
+      { id: 'd-done', title: '완료문서', status: '완료', reviewCount: 2, tags: ['피부'] },
+      { id: 'd-prog', title: '진행문서', status: '진행 중', reviewCount: 0, tags: ['약학'] },
+      { id: 'd-todo', title: '시작전문서', status: '시작 전', reviewCount: 0, tags: ['기초'] },
+      { id: 'd-upd', title: '수정문서', status: '완료', hasUpdate: true, reviewCount: 1, tags: ['임상'] }
     ];
-    App.offlineDocIds = new Set(['d-done', 'd-upd']);
     App.filteredDocuments = [...App.documents];
 
     App.renderDocumentList();
@@ -164,8 +164,9 @@ Reader.executeCheckin('good').then(() => {
     assert.ok(capturedListHtml.includes('card-status-진행중'), '진행 중 문서에 card-status-진행중 클래스가 있어야 합니다.');
     assert.ok(capturedListHtml.includes('card-status-시작전'), '시작 전 문서에 card-status-시작전 클래스가 있어야 합니다.');
     assert.ok(capturedListHtml.includes('card-has-update'), 'hasUpdate 문서에 card-has-update 클래스가 있어야 합니다.');
-    assert.ok(capturedListHtml.includes('doc-offline-badge'), '오프라인 캐시 문서에 doc-offline-badge가 렌더링되어야 합니다.');
-    console.log('✅ [Test 6 PASS] 시안 A 클래스 및 오프라인 배지 렌더링 검증 완료');
+    assert.ok(capturedListHtml.includes('doc-card-badges'), '상단에 doc-card-badges 그룹이 렌더링되어야 합니다.');
+    assert.ok(capturedListHtml.includes('🏆 2회독'), '회독수가 있는 문서는 상단 뱃지에 🏆 2회독이 표시되어야 합니다.');
+    console.log('✅ [Test 6 PASS] 시안 A 클래스 및 상단 고정 뱃지 렌더링 검증 완료');
 
     // 7. Test 온디맨드 태그 바텀시트 빈도 계산
     console.log('🧪 [Test 7] 온디맨드 태그 모아보기 빈도수 계산 검증');

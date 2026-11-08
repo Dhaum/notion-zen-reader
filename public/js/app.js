@@ -669,9 +669,10 @@ const App = {
         cardStatusClass = 'card-status-진행중';
       }
 
+      // 회독수 뱃지 (상단 우측 상태 뱃지 좌측에 고정 배치하여 하단 태그 밀림 원천 차단)
       const reviewBadge = doc.reviewCount > 0
         ? `<span class="doc-review-badge">🏆 ${doc.reviewCount}회독</span>`
-        : `<span style="font-size: 0.75rem; color: var(--text-muted);">미학습</span>`;
+        : '';
 
       // 노션 수정 감지 뱃지 및 인디케이터 클래스
       const updatedBadge = doc.hasUpdate
@@ -679,31 +680,26 @@ const App = {
         : '';
       const updateClass = doc.hasUpdate ? 'card-has-update' : '';
 
-      // 오프라인 저장 완료 인디케이터 배지
-      const isOfflineCached = this.offlineDocIds && this.offlineDocIds.has(doc.id);
-      const offlineBadge = isOfflineCached
-        ? `<span class="doc-offline-badge" title="로컬 저장소에 본문이 다운로드되어 완전 오프라인 열람 가능">💾 오프라인</span>`
-        : '';
-
       html += `
         <div class="doc-card ${cardStatusClass} ${updateClass}" onclick="Reader.open('${doc.id}')">
-          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px;">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px;">
             <div class="doc-card-title" style="margin-bottom: 0; flex: 1 1 auto; min-width: 0; word-break: keep-all; overflow-wrap: break-word;">
               ${this.escapeHtml(doc.title)}
               ${updatedBadge}
             </div>
-            <span class="card-status-badge ${statusBadgeClass}" style="white-space: nowrap !important; flex-shrink: 0 !important; display: inline-flex !important; word-break: keep-all !important; line-height: 1.2 !important;">${this.escapeHtml(s)}</span>
+            <div class="doc-card-badges">
+              ${reviewBadge}
+              <span class="card-status-badge ${statusBadgeClass}" style="white-space: nowrap !important; line-height: 1.2 !important;">${this.escapeHtml(s)}</span>
+            </div>
           </div>
           <div class="doc-card-meta">
-            ${offlineBadge}
-            ${createdDate ? `<span style="color: var(--text-muted); font-size: 0.75rem;">${createdDate}</span>` : ''}
+            ${createdDate ? `<span style="color: var(--text-muted); font-size: 0.75rem; flex-shrink: 0;">${createdDate}</span>` : ''}
             ${(doc.tags || []).slice(0, 10).map(t => {
               const activeQuery = (this.searchQuery || '').trim().replace(/^#/, '').toLowerCase();
               const isMatch = activeQuery && t.toLowerCase() === activeQuery;
               return `<span class="doc-tag ${isMatch ? 'doc-tag-active' : ''}" data-tag="${this.escapeHtml(t)}" onclick="event.stopPropagation(); App.filterByTag(this.dataset.tag)">#${this.escapeHtml(t)}</span>`;
             }).join(' ')}
-            ${(doc.tags || []).length > 10 ? `<span style="font-size: 0.7rem; color: var(--text-muted); padding: 2px 4px;">+${doc.tags.length - 10}</span>` : ''}
-            <span style="margin-left: auto;">${reviewBadge}</span>
+            ${(doc.tags || []).length > 10 ? `<span style="font-size: 0.7rem; color: var(--text-muted); padding: 2px 4px; flex-shrink: 0;">+${doc.tags.length - 10}</span>` : ''}
           </div>
         </div>
       `;
