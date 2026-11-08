@@ -168,6 +168,27 @@ Reader.executeCheckin('good').then(() => {
     assert.ok(capturedListHtml.includes('🏆 2회독'), '회독수가 있는 문서는 상단 뱃지에 🏆 2회독이 표시되어야 합니다.');
     console.log('✅ [Test 6 PASS] 시안 A 클래스 및 상단 고정 뱃지 렌더링 검증 완료');
 
+    // 6-1. Test 1안: 정렬 기준에 따른 스마트 날짜 전환 (생성일순 vs 최근 수정순)
+    console.log('🧪 [Test 6-1] 정렬 기준에 따른 스마트 날짜 라벨 전환 검증 (1안)');
+    App.documents = [
+      { id: 'd-date', title: '날짜테스트', createdAt: '2026-10-15T00:00:00.000Z', updatedAt: '2026-11-08T00:00:00.000Z' }
+    ];
+    App.filteredDocuments = [...App.documents];
+
+    // Case A: 기본 생성일순 정렬
+    App.sortOrder = 'created_desc';
+    App.renderDocumentList();
+    assert.ok(capturedListHtml.includes('date-created'), '생성일순 정렬 시 date-created 클래스가 포함되어야 합니다.');
+    assert.ok(capturedListHtml.includes('26.10.15'), '생성일자(26.10.15)가 렌더링되어야 합니다.');
+    assert.ok(!capturedListHtml.includes('🔄 26.11.08'), '생성일순 정렬 시에는 수정 아이콘 🔄이 노출되지 않아야 합니다.');
+
+    // Case B: 최근 수정순 정렬
+    App.sortOrder = 'updated_desc';
+    App.renderDocumentList();
+    assert.ok(capturedListHtml.includes('date-updated'), '최근 수정순 정렬 시 date-updated 클래스가 포함되어야 합니다.');
+    assert.ok(capturedListHtml.includes('🔄 26.11.08'), '최근 수정순 정렬 시 🔄 와 함께 수정일자(26.11.08)가 렌더링되어야 합니다.');
+    console.log('✅ [Test 6-1 PASS] 정렬 모드별 스마트 날짜 전환 정상 동작 확인');
+
     // 7. Test 온디맨드 태그 바텀시트 빈도 계산
     console.log('🧪 [Test 7] 온디맨드 태그 모아보기 빈도수 계산 검증');
     let capturedTagChips = '';

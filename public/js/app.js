@@ -512,6 +512,15 @@ const App = {
   setSortOrder(order) {
     this.sortOrder = order;
     this.applyFilterAndSort();
+    if (order === 'updated_desc') {
+      this.showToast('🔄 최근 수정순 정렬 (수정일자 표시)');
+    } else if (order === 'created_desc') {
+      this.showToast('📅 생성일 최신순 정렬 (생성일자 표시)');
+    } else if (order === 'created_asc') {
+      this.showToast('📅 생성일 과거순 정렬 (생성일자 표시)');
+    } else if (order === 'title_asc') {
+      this.showToast('🔤 가나다순 정렬');
+    }
   },
 
   filterDocuments(query) {
@@ -655,7 +664,24 @@ const App = {
 
     this.filteredDocuments.forEach(doc => {
       const lastDate = doc.lastReviewedAt ? new Date(doc.lastReviewedAt).toLocaleDateString() : '미학습';
-      const createdDate = this.formatShortDate(doc.createdAt);
+
+      // 1안 적용: 정렬 기준에 따른 스마트 날짜 전환 (수정순 정렬 시 🔄 수정일자 강조)
+      let dateBadgeHtml = '';
+      if (this.sortOrder === 'updated_desc') {
+        const updatedDate = this.formatShortDate(doc.updatedAt || doc.createdAt);
+        const createdDate = this.formatShortDate(doc.createdAt);
+        if (updatedDate) {
+          const tooltip = createdDate ? `최근 수정: ${updatedDate} (최초 생성: ${createdDate})` : `최근 수정: ${updatedDate}`;
+          dateBadgeHtml = `<span class="doc-date-badge date-updated" title="${tooltip}" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; font-size: 0.75rem; font-weight: 600;">🔄 ${updatedDate}</span>`;
+        }
+      } else {
+        const createdDate = this.formatShortDate(doc.createdAt);
+        const updatedDate = this.formatShortDate(doc.updatedAt);
+        if (createdDate) {
+          const tooltip = (updatedDate && updatedDate !== createdDate) ? `최초 생성: ${createdDate} (최근 수정: ${updatedDate})` : `생성: ${createdDate}`;
+          dateBadgeHtml = `<span class="doc-date-badge date-created" title="${tooltip}" style="color: var(--text-muted); font-size: 0.75rem; flex-shrink: 0;">${createdDate}</span>`;
+        }
+      }
 
       // 상태별 뱃지 & 시안 A 좌측 상태 인디케이터 클래스
       const s = doc.status || '시작 전';
@@ -693,7 +719,7 @@ const App = {
             </div>
           </div>
           <div class="doc-card-meta">
-            ${createdDate ? `<span style="color: var(--text-muted); font-size: 0.75rem; flex-shrink: 0;">${createdDate}</span>` : ''}
+            ${dateBadgeHtml}
             ${(doc.tags || []).slice(0, 10).map(t => {
               const activeQuery = (this.searchQuery || '').trim().replace(/^#/, '').toLowerCase();
               const isMatch = activeQuery && t.toLowerCase() === activeQuery;

@@ -427,6 +427,20 @@ body {
   display: none;
 }
 
+/* 정렬 기준에 따른 스마트 날짜 뱃지 */
+.doc-date-badge {
+  font-family: var(--font-family-mono, monospace);
+  letter-spacing: -0.2px;
+}
+
+.doc-date-badge.date-updated {
+  color: var(--accent) !important;
+  background: rgba(99, 102, 241, 0.12);
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
 .doc-tag {
   background-color: var(--bg-secondary);
   padding: 3px 8px;
