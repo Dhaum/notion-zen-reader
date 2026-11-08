@@ -16,7 +16,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon.png">
 
-  <link rel="stylesheet" href="/css/app.css?v=20261106_v10">
+  <link rel="stylesheet" href="/css/app.css?v=20261108_v11">
 </head>
 <body class="theme-dark font-md">
 
@@ -46,10 +46,11 @@
   <!-- 메인 뷰 컨테이너 -->
   <main class="container">
     
-    <!-- 탭 네비게이션 (서재 / 대시보드) -->
+    <!-- 탭 네비게이션 (서재 / 대시보드 / 데이터 및 설정) -->
     <nav class="nav-tabs">
       <button id="tab-btn-list" class="nav-tab-item active" onclick="App.showView('list')">📚 지식 서재</button>
       <button id="tab-btn-dashboard" class="nav-tab-item" onclick="App.showView('dashboard')">📊 학습 대시보드</button>
+      <button id="tab-btn-settings" class="nav-tab-item" onclick="App.showView('settings')">⚙️ 데이터 및 설정</button>
     </nav>
 
     <!-- 1. 지식 서재 (목록 뷰) -->
@@ -104,6 +105,13 @@
       </div>
     </section>
 
+    <!-- 4. 데이터 및 설정 (신규 통합 뷰) -->
+    <section id="view-settings" style="display: none;">
+      <div id="settings-content">
+        <!-- 자바스크립트로 렌더링 -->
+      </div>
+    </section>
+
   </main>
 
   <!-- 8.4인치 태블릿 알도큐브 내추럴 썸 존 슬림 플로팅 아일랜드 독 -->
@@ -148,10 +156,11 @@
   </div>
 
   <!-- 스크립트 로딩 -->
-  <script src="/js/storage-idb.js?v=20261106_v8"></script>
-  <script src="/js/offline.js?v=20261106_v8"></script>
-  <script src="/js/reader.js?v=20261106_v8"></script>
-  <script src="/js/dashboard.js?v=20261106_v8"></script>
-  <script src="/js/app.js?v=20261106_v8"></script>
+  <script src="/js/storage-idb.js?v=20261108_v11"></script>
+  <script src="/js/offline.js?v=20261108_v11"></script>
+  <script src="/js/reader.js?v=20261108_v11"></script>
+  <script src="/js/dashboard.js?v=20261108_v11"></script>
+  <script src="/js/settings.js?v=20261108_v11"></script>
+  <script src="/js/app.js?v=20261108_v11"></script>
 </body>
 </html>

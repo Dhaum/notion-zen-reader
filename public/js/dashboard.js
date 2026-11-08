@@ -284,26 +284,22 @@ const Dashboard = {
             </div>
           </div>
 
-          <!-- 5. 태블릿 데이터 백업 및 복원 (영구 보존 세이프티 넷) -->
+          <!-- 5. 데이터 백업 및 오프라인 관리 바로가기 -->
           <div class="dash-panel" style="margin-top: 20px; background: rgba(30, 41, 59, 0.4);">
             <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
               <div>
                 <div style="font-weight: 700; font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
-                  <span>🛡️ 태블릿 로컬 DB 보존</span>
+                  <span>🛡️ 태블릿 SSD 로컬 보존</span>
                   <span style="font-size: 0.72rem; background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 6px; border-radius: 4px; font-weight: 600;">IndexedDB Persist</span>
                 </div>
                 <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 4px;">
-                  Vercel 서버리스와 무관하게 태블릿 SSD에 영구 보존됩니다.
+                  전체 학습 기록 백업/복원 및 오프라인 동기화는 설정 탭에서 관리할 수 있습니다.
                 </div>
               </div>
-              <div style="display: flex; gap: 8px;">
-                <button class="btn btn-sm" onclick="ZenStorage.exportBackupJSON()">
-                  📦 백업 JSON
+              <div>
+                <button class="btn btn-sm btn-primary" onclick="App.showView('settings')">
+                  ⚙️ 데이터 및 설정 열기 →
                 </button>
-                <label class="btn btn-sm" style="cursor: pointer; margin-bottom: 0;">
-                  📥 복원
-                  <input type="file" accept=".json" style="display: none;" onchange="Dashboard.handleImportBackup(this)">
-                </label>
               </div>
             </div>
           </div>

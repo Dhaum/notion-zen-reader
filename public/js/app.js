@@ -118,18 +118,24 @@ const App = {
   },
 
   setTheme(theme) {
-    document.body.classList.remove('theme-dark', 'theme-light', 'theme-sepia');
+    document.body.classList.remove('theme-dark', 'theme-light', 'theme-sepia', 'theme-green');
     document.body.classList.add(theme);
     localStorage.setItem('zen_theme', theme);
+    if (typeof Settings !== 'undefined' && Settings.updateThemeButtons) {
+      Settings.updateThemeButtons(theme);
+    }
   },
 
   toggleTheme() {
     if (document.body.classList.contains('theme-dark')) {
       this.setTheme('theme-light');
-      this.showToast('☀️ 종이 라이트 모드');
+      this.showToast('☀️ 문켄 라이트 모드');
     } else if (document.body.classList.contains('theme-light')) {
       this.setTheme('theme-sepia');
-      this.showToast('☕ 세피아 독서 모드');
+      this.showToast('☕ 킨들 세피아 독서 모드');
+    } else if (document.body.classList.contains('theme-sepia')) {
+      this.setTheme('theme-green');
+      this.showToast('🌲 에버그린 자연 초록 모드');
     } else {
       this.setTheme('theme-dark');
       this.showToast('🌙 딥 다크 모드');
@@ -140,6 +146,9 @@ const App = {
     document.body.classList.remove('font-sm', 'font-md', 'font-lg');
     document.body.classList.add(size);
     localStorage.setItem('zen_font_size', size);
+    if (typeof Settings !== 'undefined' && Settings.updateFontButtons) {
+      Settings.updateFontButtons(size);
+    }
   },
 
   cycleFontSize() {
@@ -581,35 +590,58 @@ const App = {
     }
   },
 
-  // 5. 뷰 전환 제어
+  // 5. 뷰 전환 제어 (서재 / 대시보드 / 설정 / 리더)
   showView(viewName) {
     this.currentView = viewName;
     const listView = document.getElementById('view-list');
     const readerView = document.getElementById('view-reader');
     const dashboardView = document.getElementById('view-dashboard');
+    const settingsView = document.getElementById('view-settings');
     const tabList = document.getElementById('tab-btn-list');
     const tabDashboard = document.getElementById('tab-btn-dashboard');
+    const tabSettings = document.getElementById('tab-btn-settings');
+
+    const updateTabs = (activeTab) => {
+      [tabList, tabDashboard, tabSettings].forEach(tab => {
+        if (!tab) return;
+        if (tab === activeTab) tab.classList.add('active');
+        else tab.classList.remove('active');
+      });
+    };
 
     if (viewName === 'reader') {
-      listView.style.display = 'none';
-      readerView.style.display = 'block';
-      dashboardView.style.display = 'none';
+      if (listView) listView.style.display = 'none';
+      if (readerView) readerView.style.display = 'block';
+      if (dashboardView) dashboardView.style.display = 'none';
+      if (settingsView) settingsView.style.display = 'none';
     } else if (viewName === 'dashboard') {
       Reader.cleanup();
-      listView.style.display = 'none';
-      readerView.style.display = 'none';
-      dashboardView.style.display = 'block';
-      tabList.classList.remove('active');
-      tabDashboard.classList.add('active');
-      Dashboard.load();
-    } else {
-      // list
+      if (listView) listView.style.display = 'none';
+      if (readerView) readerView.style.display = 'none';
+      if (dashboardView) dashboardView.style.display = 'block';
+      if (settingsView) settingsView.style.display = 'none';
+      updateTabs(tabDashboard);
+      if (typeof Dashboard !== 'undefined' && Dashboard.load) {
+        Dashboard.load();
+      }
+    } else if (viewName === 'settings') {
       Reader.cleanup();
-      listView.style.display = 'block';
-      readerView.style.display = 'none';
-      dashboardView.style.display = 'none';
-      tabList.classList.add('active');
-      tabDashboard.classList.remove('active');
+      if (listView) listView.style.display = 'none';
+      if (readerView) readerView.style.display = 'none';
+      if (dashboardView) dashboardView.style.display = 'none';
+      if (settingsView) settingsView.style.display = 'block';
+      updateTabs(tabSettings);
+      if (typeof Settings !== 'undefined' && Settings.load) {
+        Settings.load();
+      }
+    } else {
+      // list (서재)
+      Reader.cleanup();
+      if (listView) listView.style.display = 'block';
+      if (readerView) readerView.style.display = 'none';
+      if (dashboardView) dashboardView.style.display = 'none';
+      if (settingsView) settingsView.style.display = 'none';
+      updateTabs(tabList);
       this.loadDocuments(); // 목록 새로고침 (회독수 갱신 반영)
     }
   },

@@ -14,7 +14,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'POST') {
     try {
       const body = req.body || {};
-      const { docId, docTitle, durationSeconds, device } = body;
+      const { docId, docTitle, durationSeconds, reviewCount, feedback, readAt, timestamp, device } = body;
 
       if (!docId) {
         return res.status(400).json({ success: false, error: "docId가 누락되었습니다." });
@@ -24,10 +24,13 @@ module.exports = async function handler(req, res) {
         docId,
         docTitle: docTitle || "제목 없음",
         durationSeconds: durationSeconds || 60,
+        reviewCount: reviewCount || 1,
+        feedback: feedback || "good",
+        readAt: readAt || timestamp || new Date().toISOString(),
         device: device || "alldocube-tablet"
       });
 
-      console.log(`[study-tracker] 체크인 완료: ${docTitle} (${docId}) - ${saved.durationSeconds}초`);
+      console.log(`[study-tracker] 체크인 완료: ${docTitle} (${docId}) - ${saved.durationSeconds}초, ${saved.feedback}`);
 
       return res.status(200).json({
         success: true,

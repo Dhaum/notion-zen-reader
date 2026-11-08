@@ -43,11 +43,13 @@ function readAllLogs() {
 function saveLog(entry) {
   const logs = readAllLogs();
   const newLog = {
-    id: 'log-' + Date.now(),
+    id: entry.id || ('log-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)),
     docId: entry.docId,
     docTitle: entry.docTitle || "제목 없음",
-    readAt: entry.readAt || new Date().toISOString(),
+    readAt: entry.readAt || entry.timestamp || new Date().toISOString(),
     durationSeconds: Number(entry.durationSeconds) || 60,
+    reviewCount: Number(entry.reviewCount) || 1,
+    feedback: entry.feedback || "good",
     device: entry.device || "alldocube-tablet"
   };
 
