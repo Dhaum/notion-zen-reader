@@ -165,7 +165,7 @@ Reader.executeCheckin('good').then(() => {
     assert.ok(capturedListHtml.includes('card-status-시작전'), '시작 전 문서에 card-status-시작전 클래스가 있어야 합니다.');
     assert.ok(capturedListHtml.includes('card-has-update'), 'hasUpdate 문서에 card-has-update 클래스가 있어야 합니다.');
     assert.ok(capturedListHtml.includes('doc-card-badges'), '상단에 doc-card-badges 그룹이 렌더링되어야 합니다.');
-    assert.ok(capturedListHtml.includes('🏆 2회독'), '회독수가 있는 문서는 상단 뱃지에 🏆 2회독이 표시되어야 합니다.');
+    assert.ok(capturedListHtml.includes('doc-review-badge">2회독<'), '회독수가 있는 문서는 상단 뱃지에 2회독이 표시되어야 합니다.');
     console.log('✅ [Test 6 PASS] 시안 A 클래스 및 상단 고정 뱃지 렌더링 검증 완료');
 
     // 6-1. Test 1안: 정렬 기준에 따른 스마트 날짜 전환 (생성일순 vs 최근 수정순)
@@ -180,13 +180,13 @@ Reader.executeCheckin('good').then(() => {
     App.renderDocumentList();
     assert.ok(capturedListHtml.includes('date-created'), '생성일순 정렬 시 date-created 클래스가 포함되어야 합니다.');
     assert.ok(capturedListHtml.includes('26.10.15'), '생성일자(26.10.15)가 렌더링되어야 합니다.');
-    assert.ok(!capturedListHtml.includes('🔄 26.11.08'), '생성일순 정렬 시에는 수정 아이콘 🔄이 노출되지 않아야 합니다.');
+    assert.ok(!capturedListHtml.includes('date-updated') && !capturedListHtml.includes('<span>26.11.08</span>'), '생성일순 정렬 시에는 수정 날짜/아이콘이 노출되지 않아야 합니다.');
 
     // Case B: 최근 수정순 정렬
     App.sortOrder = 'updated_desc';
     App.renderDocumentList();
     assert.ok(capturedListHtml.includes('date-updated'), '최근 수정순 정렬 시 date-updated 클래스가 포함되어야 합니다.');
-    assert.ok(capturedListHtml.includes('🔄 26.11.08'), '최근 수정순 정렬 시 🔄 와 함께 수정일자(26.11.08)가 렌더링되어야 합니다.');
+    assert.ok(capturedListHtml.includes('<span>26.11.08</span>'), '최근 수정순 정렬 시 수정일자(26.11.08)가 렌더링되어야 합니다.');
     console.log('✅ [Test 6-1 PASS] 정렬 모드별 스마트 날짜 전환 정상 동작 확인');
 
     // 7. Test 온디맨드 태그 바텀시트 빈도 계산
@@ -254,7 +254,7 @@ Reader.executeCheckin('good').then(() => {
     console.log('✅ [Test 8 PASS] Reader.goBack 히스토리 라우팅 및 TOC 헤딩 수집 검증 완료');
 
     await runV18Tests();
-    console.log('\n🎉 ALL 14 TESTS PASSED! v18 오프라인/동기화/보존 전체 무결성 검증 완료.');
+    console.log('\n🎉 ALL 19 TESTS PASSED! v20 unslop UI·피드백·새로고침 락·오프라인 필터 전체 무결성 검증 완료.');
   });
 }).catch(err => {
   console.error('❌ 테스트 실패:', err);
@@ -831,7 +831,7 @@ async function runV18Tests() {
     await Reader.open('doc-r1', false);
     assert.strictEqual(readerEl.innerHTML.includes('초기 저장 본문'), true);
     assert.strictEqual(readerEl.innerHTML.includes('reader-cache-banner banner-offline'), true, '오프라인 열람 시 banner-offline 배너가 렌더링되어야 합니다.');
-    assert.strictEqual(readerEl.innerHTML.includes('📦 오프라인 저장본 열람 중'), true);
+    assert.strictEqual(readerEl.innerHTML.includes('오프라인 저장본 열람 중'), true);
     Reader.cleanup();
 
     // 11-C. Outdated doc when fetch fails (or returns SW offline JSON) falls back with banner-outdated
@@ -963,7 +963,7 @@ async function runV18Tests() {
     const cssSrc = fs.readFileSync(path.join(__dirname, '../public/css/app.css'), 'utf-8');
     const notionSrc = fs.readFileSync(path.join(__dirname, '../api/lib/notion.js'), 'utf-8');
 
-    assert.ok(swSrc.includes("const CACHE_NAME = 'zen-reader-v18'"), 'sw.js CACHE_NAME이 zen-reader-v18이어야 합니다.');
+    assert.ok(swSrc.includes("const CACHE_NAME = 'zen-reader-v20'"), 'sw.js CACHE_NAME이 zen-reader-v20이어야 합니다.');
     assert.ok(swSrc.includes("const DATA_CACHE_NAME = 'zen-data-v1'"), 'sw.js DATA_CACHE_NAME이 zen-data-v1이어야 합니다.');
     assert.ok(
       swSrc.includes('PRESERVED_CACHES = [CACHE_NAME, DATA_CACHE_NAME, IMAGE_CACHE_NAME]'),
@@ -982,8 +982,11 @@ async function runV18Tests() {
     );
 
     assert.strictEqual(htmlSrc.includes('v20261108_v17'), false, 'index.html에 구버전 v17 쿼리스트링이 남아있으면 안 됩니다.');
-    const v18Matches = htmlSrc.match(/\?v=20261115_v18/g) || [];
-    assert.strictEqual(v18Matches.length, 7, 'index.html의 app.css + 6개 script 태그 모두 ?v=20261115_v18이어야 합니다.');
+    assert.strictEqual(htmlSrc.includes('v20261115_v18'), false, 'index.html에 구버전 v18 쿼리스트링이 남아있으면 안 됩니다.');
+    assert.strictEqual(htmlSrc.includes('v20261115_v19'), false, 'index.html에 구버전 v19 쿼리스트링이 남아있으면 안 됩니다.');
+    const v20Matches = htmlSrc.match(/\?v=20261115_v20/g) || [];
+    assert.strictEqual(v20Matches.length, 7, 'index.html의 app.css + 6개 script 태그 모두 ?v=20261115_v20이어야 합니다.');
+    assert.ok(swSrc.includes("const CACHE_NAME = 'zen-reader-v20';"), 'sw.js CACHE_NAME이 zen-reader-v20여야 합니다.');
 
     assert.ok(/DB_VERSION:\s*2\b/.test(offlineSrc), 'offline.js의 DB_VERSION이 2여야 합니다.');
     assert.ok(offlineSrc.includes('ZenStorage.openDB()'), 'offline.js가 ZenStorage.openDB()에 위임해야 합니다.');
@@ -996,7 +999,16 @@ async function runV18Tests() {
       '.reader-cache-banner.banner-outdated',
       '.cache-stats-grid',
       '.cache-stat-pill',
-      '.cache-actions-row'
+      '.cache-actions-row',
+      '.offline-filter-pill',
+      '.zen-dock-feedback-popover',
+      '.btn-feedback-easy.active',
+      '.study-checkin-status',
+      '.is-loading',
+      '.icon-spin-target',
+      '.view-enter',
+      '.status-dot',
+      '.pin-modal-icon'
     ].forEach(cls => {
       assert.ok(cssSrc.includes(cls), `app.css에 ${cls} 스타일이 정의되어 있어야 합니다.`);
     });
@@ -1058,5 +1070,301 @@ async function runV18Tests() {
 
     delete global.window.indexedDB;
     console.log('✅ [Test 14 PASS] Settings 오프라인 캐시 관리 패널, 고아 정리, studyLogs 보존 검증 완료');
+  }
+
+  // =========================================================================
+  // Test 15: 플로팅 독 완료 버튼 피드백 팝오버 선택 검증
+  // =========================================================================
+  console.log('🧪 [Test 15] 플로팅 독 완료 버튼 -> 기억체감도 팝오버 선택 검증');
+  {
+    const reg = resetDomMocks();
+    const storage = loadFreshZenStorage();
+    loadFreshAppAndReader();
+    const mockIdb = createMockIndexedDB();
+    global.window.indexedDB = mockIdb.indexedDB;
+    global.localStorage._store = {};
+    await storage.openDB();
+
+    global.OfflineManager = {
+      isOnline: true,
+      sendStudyLog: async () => ({ success: true }),
+      updateStudyLogFeedback: async () => ({ success: true })
+    };
+
+    App.documents = [{ id: 'doc-fb1', title: '고혈압 약제', reviewCount: 2 }];
+    Reader.currentDoc = { id: 'doc-fb1', title: '고혈압 약제', reviewCount: 2 };
+    Reader.hasLoggedStudy = false;
+    Reader.currentFeedback = null;
+    Reader.isDockFeedbackOpen = false;
+    Reader.durationSeconds = 95;
+
+    Reader.toggleDockFeedbackPicker();
+    const popover = reg.getEl('zen-dock-feedback-popover');
+    assert.strictEqual(Reader.isDockFeedbackOpen, true, '팝오버가 열려야 합니다.');
+    assert.strictEqual(popover.style.display, 'block', '팝오버 display가 block이어야 합니다.');
+    assert.strictEqual(reg.getEl('dock-feedback-popover-title').innerText, '기억 체감도 선택');
+
+    await Reader.selectFeedbackFromDock('hard');
+    assert.strictEqual(Reader.isDockFeedbackOpen, false, '피드백 선택 후 팝오버가 자동으로 닫혀야 합니다.');
+    assert.strictEqual(Reader.hasLoggedStudy, true, '체크인이 완료되어야 합니다.');
+    assert.strictEqual(Reader.currentFeedback, 'hard', '선택한 기억체감도(hard)가 기록되어야 합니다.');
+    assert.strictEqual(Reader.currentDoc.reviewCount, 3, '최초 선택 시 회독수가 2 -> 3으로 1회만 증가해야 합니다.');
+
+    const logs = await storage.getAllLogs();
+    assert.strictEqual(logs.length, 1, 'IDB 로그가 정확히 1건만 생성되어야 합니다.');
+    assert.strictEqual(logs[0].feedback, 'hard', 'IDB 로그에 hard 피드백이 저장되어야 합니다.');
+    assert.ok(reg.getEl('dock-checkin-btn').innerHTML.includes('헷갈림'), '플로팅 독 완료 버튼 라벨에 선택한 체감도가 반영되어야 합니다.');
+
+    delete global.window.indexedDB;
+    console.log('✅ [Test 15 PASS] 플로팅 독 기억체감도 팝오버 선택 및 1회 기록 검증 완료');
+  }
+
+  // =========================================================================
+  // Test 16: 동일 세션 내 기억체감도 정정 (실수 클릭 변경 & 오프라인 큐 제자리 갱신)
+  // =========================================================================
+  console.log('🧪 [Test 16] 실수 선택 정정 시 회독수 유지 및 오프라인 큐 제자리 수정 검증');
+  {
+    const reg = resetDomMocks();
+    const storage = loadFreshZenStorage();
+    loadFreshAppAndReader();
+    const offlineSrc = fs.readFileSync(realOfflineCodePath, 'utf-8');
+    eval(offlineSrc.replace('const OfflineManager =', 'global.OfflineManager ='));
+
+    const mockIdb = createMockIndexedDB();
+    global.window.indexedDB = mockIdb.indexedDB;
+    global.localStorage._store = {};
+    setNavigatorOnline(false);
+    OfflineManager.isOnline = false;
+    await storage.openDB();
+
+    Reader.currentDoc = { id: 'doc-fb2', title: '당뇨병 GLP-1', reviewCount: 0 };
+    Reader.hasLoggedStudy = false;
+    Reader.currentLogId = null;
+    Reader.currentClientLogId = null;
+    Reader.currentFeedback = null;
+    Reader.durationSeconds = 120;
+
+    // 1차 실수 선택: easy
+    await Reader.triggerManualCheckin('easy');
+    assert.strictEqual(Reader.currentDoc.reviewCount, 1);
+    assert.strictEqual(Reader.currentFeedback, 'easy');
+    assert.strictEqual(OfflineManager.getQueue().length, 1, '오프라인 큐에 1건이 적재되어야 합니다.');
+    assert.strictEqual(OfflineManager.getQueue()[0].feedback, 'easy');
+
+    // 2차 정정 선택: hard (회독수 및 큐 길이 증가 금지!)
+    await Reader.triggerManualCheckin('hard');
+    assert.strictEqual(Reader.currentDoc.reviewCount, 1, '피드백 정정 시 회독수가 중복 증가하면 안 됩니다.');
+    assert.strictEqual(Reader.currentFeedback, 'hard', '현재 세션 피드백이 hard로 갱신되어야 합니다.');
+
+    const queue = OfflineManager.getQueue();
+    assert.strictEqual(queue.length, 1, '오프라인 큐 항목 수가 1건으로 유지(제자리 갱신)되어야 합니다.');
+    assert.strictEqual(queue[0].feedback, 'hard', '큐 항목의 feedback이 hard로 수정되어야 합니다.');
+
+    const logs = await storage.getAllLogs();
+    assert.strictEqual(logs.length, 1, 'IndexedDB 로그 건수도 1건으로 유지되어야 합니다.');
+    assert.strictEqual(logs[0].feedback, 'hard', 'IndexedDB 로그의 feedback이 hard로 갱신되어야 합니다.');
+
+    assert.strictEqual(reg.getEl('fb-btn-easy').classList.contains('active'), false);
+    assert.strictEqual(reg.getEl('fb-btn-hard').classList.contains('active'), true);
+    assert.ok(reg.getEl('study-checkin-status').innerHTML.includes('헷갈림'), '상태 안내 문구도 hard 기준으로 갱신되어야 합니다.');
+
+    // 팝오버 타이틀도 정정 모드로 전환되어야 함
+    Reader.toggleDockFeedbackPicker(true);
+    assert.strictEqual(reg.getEl('dock-feedback-popover-title').innerText, '기억 체감도 변경 (실수 정정)');
+
+    delete global.window.indexedDB;
+    console.log('✅ [Test 16 PASS] 피드백 실수 정정 시 IDB/오프라인 큐/UI 무중복 갱신 검증 완료');
+  }
+
+  // =========================================================================
+  // Test 17: 서재 탭 "오프라인만 보기" 필터 조합 및 카운트 검증
+  // =========================================================================
+  console.log('🧪 [Test 17] 서재 탭 오프라인 열람 가능 문서 모아보기 필터 검증');
+  {
+    const reg = resetDomMocks();
+    loadFreshZenStorage();
+    loadFreshAppAndReader();
+    global.localStorage._store = {};
+
+    App.documents = [
+      { id: 'd-off-1', title: '저장됨-완료', status: '완료', createdAt: '2026-11-10T00:00:00Z', isCachedLocally: true },
+      { id: 'd-on-2', title: '미저장-완료', status: '완료', createdAt: '2026-11-11T00:00:00Z', isCachedLocally: false },
+      { id: 'd-off-3', title: '저장됨-진행', status: '진행 중', createdAt: '2026-11-12T00:00:00Z', isCachedLocally: false }
+    ];
+    App.offlineDocIds = new Set(['d-off-1', 'd-off-3']);
+    App.selectedStatus = 'all';
+    App.onlyOfflineCached = false;
+
+    App.updateStatusPillCounts();
+    assert.strictEqual(String(reg.getEl('count-all').innerText), '3');
+    assert.strictEqual(String(reg.getEl('count-offline').innerText), '2');
+
+    // 오프라인만 토글 ON
+    App.toggleOfflineOnlyFilter();
+    assert.strictEqual(App.onlyOfflineCached, true);
+    assert.strictEqual(global.localStorage.getItem('zen_filter_offline_only'), 'true');
+    assert.strictEqual(reg.getEl('btn-offline-only-filter').classList.contains('active'), true);
+    assert.strictEqual(App.filteredDocuments.length, 2, '오프라인 저장된 2개 문서만 노출되어야 합니다.');
+    assert.deepStrictEqual(App.filteredDocuments.map(d => d.id), ['d-off-3', 'd-off-1']);
+    assert.strictEqual(String(reg.getEl('count-all').innerText), '2', '오프라인만 모드에서는 상태 카운트도 오프라인 모수로 연동됩니다.');
+    assert.strictEqual(String(reg.getEl('count-offline').innerText), '2', '전체 오프라인 저장 개수는 유지되어야 합니다.');
+
+    // 상태 필터('완료')와 교차 조합
+    App.setStatusFilter('완료');
+    assert.strictEqual(App.filteredDocuments.length, 1);
+    assert.strictEqual(App.filteredDocuments[0].id, 'd-off-1');
+
+    // 필터 해제 시 원상복구
+    App.toggleOfflineOnlyFilter(false);
+    assert.strictEqual(App.onlyOfflineCached, false);
+    assert.strictEqual(reg.getEl('btn-offline-only-filter').classList.contains('active'), false);
+    assert.strictEqual(App.filteredDocuments.length, 2, '오프라인 필터 해제 시 상태(완료)에 해당하는 2개 모두 노출되어야 합니다.');
+
+    console.log('✅ [Test 17 PASS] 서재 탭 오프라인만 모아보기 및 교차 필터링 검증 완료');
+  }
+
+  // =========================================================================
+  // Test 18: 서버 storage.js updateLogFeedback 및 중복 ID 방지 검증
+  // =========================================================================
+  console.log('🧪 [Test 18] 서버 api/lib/storage.js updateLogFeedback 및 clientLogId 중복 방지 검증');
+  {
+    const logFilePath = path.join(__dirname, '../data/study-logs.json');
+    const hadFile = fs.existsSync(logFilePath);
+    const originalContent = hadFile ? fs.readFileSync(logFilePath, 'utf-8') : null;
+
+    try {
+      const storageApi = require('../api/lib/storage');
+      const testId = 'log-test-v19-' + Date.now();
+      const first = storageApi.saveLog({
+        id: testId,
+        docId: 'doc-api-test',
+        docTitle: 'API 피드백 정정 테스트',
+        durationSeconds: 45,
+        reviewCount: 1,
+        feedback: 'easy'
+      });
+      assert.strictEqual(first.id, testId);
+      assert.strictEqual(first.feedback, 'easy');
+
+      // 동일 id로 updateLogFeedback 호출
+      const res = storageApi.updateLogFeedback({ id: testId, docId: 'doc-api-test', feedback: 'hard' });
+      assert.strictEqual(res.updated, true);
+      assert.strictEqual(res.log.feedback, 'hard');
+
+      // 동일 id 재전송 시 중복 추가 없이 갱신
+      const afterDuplicateSave = storageApi.saveLog({
+        id: testId,
+        docId: 'doc-api-test',
+        feedback: 'good'
+      });
+      assert.strictEqual(afterDuplicateSave.id, testId);
+      assert.strictEqual(afterDuplicateSave.feedback, 'good');
+
+      const allAfter = storageApi.readAllLogs().filter(l => l.id === testId);
+      assert.strictEqual(allAfter.length, 1, '동일 clientLogId 로그는 서버에도 단 1건만 유지되어야 합니다.');
+
+      console.log('✅ [Test 18 PASS] 서버 측 피드백 수정 및 동일 clientLogId 중복 방지 검증 완료');
+    } finally {
+      if (hadFile) {
+        fs.writeFileSync(logFilePath, originalContent, 'utf-8');
+      } else if (fs.existsSync(logFilePath)) {
+        fs.unlinkSync(logFilePath);
+      }
+    }
+  }
+
+  // =========================================================================
+  // Test 19: v20 새로고침 중복 연타 방지 락 & .is-loading 피드백 상태 정리 검증
+  // =========================================================================
+  console.log('🧪 [Test 19] 수동 새로고침 연타 방지 락(_isRefreshingDocs / _isRefreshingCurrent) 및 로딩 상태 복구 검증');
+  {
+    const reg = resetDomMocks();
+    loadFreshZenStorage();
+    loadFreshAppAndReader();
+    setNavigatorOnline(true);
+
+    const headerRefreshBtn = reg.getEl('header-refresh-btn');
+    const readerRefreshBtn = reg.getEl('btn-reader-pinpoint-refresh');
+
+    // Mock fetch that holds open until released
+    let releaseDocsFetch;
+    let docsFetchCount = 0;
+    global.fetch = (url) => {
+      if (url.startsWith('/api/documents?')) {
+        docsFetchCount++;
+        return new Promise(resolve => {
+          releaseDocsFetch = () => resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({ documents: [{ id: 'd1', title: '테스트 문서', tags: [], updatedAt: '2026-11-15T00:00:00.000Z' }] })
+          });
+        });
+      }
+      if (url === '/api/study-log') {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ stats: {} }) });
+      }
+      if (url.startsWith('/api/documents/d1')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            document: { id: 'd1', title: '테스트 문서', updatedAt: '2026-11-15T01:00:00.000Z', blocks: [] }
+          })
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+    };
+
+    const p1 = App.loadDocuments(true, headerRefreshBtn);
+    await new Promise(r => setTimeout(r, 0));
+    assert.strictEqual(App._isRefreshingDocs, true, '수동 새로고침 진행 중에는 _isRefreshingDocs가 true여야 합니다.');
+    assert.strictEqual(headerRefreshBtn.disabled, true, '새로고침 진행 중에는 헤더 버튼이 disabled 상태여야 합니다.');
+    assert.ok(headerRefreshBtn.classList.contains('is-loading'), '새로고침 진행 중에는 .is-loading 클래스가 부여되어야 합니다.');
+
+    // 중복 연타 호출 -> 즉시 무시되어야 함
+    await App.loadDocuments(true, headerRefreshBtn);
+    assert.strictEqual(docsFetchCount, 1, '진행 중인 수동 새로고침 중 연타 시 추가 API 호출이 차단되어야 합니다.');
+
+    releaseDocsFetch();
+    await p1;
+    assert.strictEqual(App._isRefreshingDocs, false, '완료 후 _isRefreshingDocs 락이 해제되어야 합니다.');
+    assert.strictEqual(headerRefreshBtn.disabled, false, '완료 후 헤더 버튼 disabled가 해제되어야 합니다.');
+    assert.strictEqual(headerRefreshBtn.classList.contains('is-loading'), false, '완료 후 .is-loading 클래스가 제거되어야 합니다.');
+
+    // 뷰어 핀포인트 새로고침 락 검증
+    Reader.currentDoc = { id: 'd1', title: '테스트 문서', updatedAt: '2026-11-15T00:00:00.000Z', blocks: [] };
+    let releaseReaderFetch;
+    let readerFetchCount = 0;
+    global.fetch = (url) => {
+      if (url.startsWith('/api/documents/d1')) {
+        readerFetchCount++;
+        return new Promise(resolve => {
+          releaseReaderFetch = () => resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({
+              success: true,
+              document: { id: 'd1', title: '테스트 문서', updatedAt: '2026-11-15T02:00:00.000Z', blocks: [] }
+            })
+          });
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+    };
+
+    const r1 = Reader.refreshCurrentDoc();
+    await new Promise(r => setTimeout(r, 0));
+    assert.strictEqual(Reader._isRefreshingCurrent, true, '뷰어 새로고침 진행 중 _isRefreshingCurrent가 true여야 합니다.');
+    assert.strictEqual(readerRefreshBtn.disabled, true, '뷰어 새로고침 버튼이 disabled 상태여야 합니다.');
+    await Reader.refreshCurrentDoc();
+    assert.strictEqual(readerFetchCount, 1, '뷰어 새로고침 중 연타 시 추가 API 요청이 차단되어야 합니다.');
+
+    releaseReaderFetch();
+    await r1;
+    assert.strictEqual(Reader._isRefreshingCurrent, false, '완료 후 _isRefreshingCurrent 락이 해제되어야 합니다.');
+    assert.strictEqual(readerRefreshBtn.disabled, false, '완료 후 뷰어 새로고침 버튼 disabled가 해제되어야 합니다.');
+
+    console.log('✅ [Test 19 PASS] 수동 새로고침 중복 연타 방지 및 로딩 상태 정리 검증 완료');
   }
 }

@@ -106,10 +106,10 @@ const Settings = {
         <div class="settings-panel">
           <div class="panel-header">
             <div class="panel-title-wrap">
-              <span class="panel-icon">🎨</span>
+              <span class="panel-icon" aria-hidden="true"><svg class="zen-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></span>
               <h2 class="panel-title">화면 모드 (안구 피로도 방어 프로파일)</h2>
             </div>
-            <span class="theme-accent-badge">신규 에버그린 탑재</span>
+            <span class="theme-accent-badge">4 프로파일</span>
           </div>
           <p class="panel-desc">
             장시간 약학 및 의학 롱폼 독서 시 눈의 피로를 최소화하는 4대 컬러 프로파일을 제공합니다.
@@ -120,7 +120,7 @@ const Settings = {
             <!-- 다크 -->
             <button onclick="Settings.selectTheme('theme-dark')" class="theme-card ${data.currentTheme === 'theme-dark' ? 'active' : ''}" style="background: #0c0f17; color: #f1f5f9; border-color: rgba(255,255,255,0.12);">
               <div class="theme-card-header">
-                <span class="theme-name">🌙 딥 다크</span>
+                <span class="theme-name">딥 다크</span>
                 <span class="theme-tag">OLED 절전</span>
               </div>
               <div class="theme-swatch" style="background: #18202f;"></div>
@@ -129,7 +129,7 @@ const Settings = {
             <!-- 라이트 -->
             <button onclick="Settings.selectTheme('theme-light')" class="theme-card ${data.currentTheme === 'theme-light' ? 'active' : ''}" style="background: #f7f4ee; color: #1e293b; border-color: rgba(0,0,0,0.1);">
               <div class="theme-card-header">
-                <span class="theme-name">☀️ 문켄 라이트</span>
+                <span class="theme-name">문켄 라이트</span>
                 <span class="theme-tag">서적 질감</span>
               </div>
               <div class="theme-swatch" style="background: #ffffff; border: 1px solid #ebe6dc;"></div>
@@ -138,16 +138,16 @@ const Settings = {
             <!-- 세피아 -->
             <button onclick="Settings.selectTheme('theme-sepia')" class="theme-card ${data.currentTheme === 'theme-sepia' ? 'active' : ''}" style="background: #f2e8d5; color: #2d2417; border-color: #d8c9a8;">
               <div class="theme-card-header">
-                <span class="theme-name">☕ 킨들 세피아</span>
+                <span class="theme-name">킨들 세피아</span>
                 <span class="theme-tag">2700K 웜</span>
               </div>
               <div class="theme-swatch" style="background: #f9f2e4; border: 1px solid #d8c9a8;"></div>
             </button>
 
-            <!-- 에버그린 (신규) -->
+            <!-- 에버그린 -->
             <button onclick="Settings.selectTheme('theme-green')" class="theme-card theme-card-green ${data.currentTheme === 'theme-green' ? 'active' : ''}" style="background: #eef5e8; color: #19331e; border-color: #a3cca2;">
               <div class="theme-card-header">
-                <span class="theme-name font-bold">🌲 에버그린</span>
+                <span class="theme-name font-bold">에버그린</span>
                 <span class="theme-tag" style="background: #8bc34a; color: #19331e; font-weight: 700;">자연 초록</span>
               </div>
               <div class="green-swatches-row">
@@ -161,7 +161,7 @@ const Settings = {
           <!-- 폰트 크기 조절 프리셋 -->
           <div class="font-settings-row">
             <div class="font-label-wrap">
-              <span>🔤 태블릿 독서 글자 크기:</span>
+              <span>태블릿 독서 글자 크기:</span>
               <strong id="settings-font-label" style="color: var(--accent); margin-left: 6px;">
                 ${data.currentFontSize === 'font-sm' ? '작게 (15px)' : (data.currentFontSize === 'font-lg' ? '크게 (20.5px)' : '보통 (17.5px)')}
               </strong>
@@ -178,7 +178,7 @@ const Settings = {
         <div class="settings-panel">
           <div class="panel-header">
             <div class="panel-title-wrap">
-              <span class="panel-icon">🔄</span>
+              <span class="panel-icon" aria-hidden="true"><svg class="zen-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg></span>
               <h2 class="panel-title">오프라인 동기화 센터</h2>
             </div>
             <span class="queue-status-pill ${queueCount > 0 ? 'pill-warning' : 'pill-success'}">
@@ -194,17 +194,17 @@ const Settings = {
             ${queueCount > 0 ? queue.slice(0, 5).map(item => `
               <div class="queue-item">
                 <div class="queue-item-left">
-                  <span class="queue-icon">⏳</span>
+                  <span class="queue-icon"><span class="status-dot dot-progress"></span></span>
                   <span class="queue-title">${this.escapeHtml(item.docTitle || '문서')}</span>
                 </div>
                 <div class="queue-item-right">
                   <span class="queue-badge">${item.reviewCount || 1}회독</span>
-                  <span class="queue-feedback">${item.feedback === 'easy' ? '🟢 수월함' : (item.feedback === 'hard' ? '🔴 헷갈림' : '🔵 적정')}</span>
+                  <span class="queue-feedback">${item.feedback === 'easy' ? '<span class="fb-dot fb-easy"></span>수월함' : (item.feedback === 'hard' ? '<span class="fb-dot fb-hard"></span>헷갈림' : '<span class="fb-dot fb-good"></span>적정')}</span>
                 </div>
               </div>
             `).join('') : `
               <div class="queue-empty">
-                ✨ 현재 대기 중인 오프라인 학습 기록이 없습니다. (모든 기록이 서버와 100% 일치)
+                현재 대기 중인 오프라인 학습 기록이 없습니다. (서버와 일치)
               </div>
             `}
           </div>
@@ -215,10 +215,10 @@ const Settings = {
             </div>
             <div class="footer-btn-group">
               <button onclick="Settings.flushOfflineQueueNow()" id="btn-settings-sync-now" class="btn btn-primary" ${queueCount === 0 ? 'disabled' : ''}>
-                ⚡ 대기 ${queueCount}건 즉시 서버 업로드
+                대기 ${queueCount}건 서버 업로드
               </button>
-              <button onclick="App.loadDocuments(true)" class="btn btn-secondary">
-                🔄 노션 대조
+              <button onclick="App.loadDocuments(true, this)" class="btn btn-secondary">
+                <svg class="zen-svg icon-spin-target" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg> 노션 대조
               </button>
             </div>
           </div>
@@ -228,11 +228,11 @@ const Settings = {
         <div class="settings-panel">
           <div class="panel-header">
             <div class="panel-title-wrap">
-              <span class="panel-icon">🛡️</span>
+              <span class="panel-icon" aria-hidden="true"><svg class="zen-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
               <h2 class="panel-title">태블릿 SSD 영구 보존 및 물리 백업</h2>
             </div>
             <span class="lock-status-badge ${isPersisted ? '' : 'lock-status-pending'}">
-              ${isPersisted ? '🔒 Persistent Lock 승인' : '⚠️ 일반 보존 (대기)'}
+              ${isPersisted ? 'Persistent Lock 승인' : '일반 보존 (대기)'}
             </span>
           </div>
           <p class="panel-desc">
@@ -262,10 +262,10 @@ const Settings = {
             </div>
             <div class="footer-btn-group">
               <button onclick="ZenStorage.exportBackupJSON()" class="btn btn-secondary">
-                📦 백업 JSON 다운로드
+                백업 JSON 다운로드
               </button>
               <label class="btn btn-secondary" style="cursor: pointer; margin-bottom: 0;">
-                📥 백업 파일 복원
+                백업 파일 복원
                 <input type="file" accept=".json" style="display: none;" onchange="Settings.handleImportBackup(this)">
               </label>
             </div>
@@ -276,7 +276,7 @@ const Settings = {
         <div class="settings-panel">
           <div class="panel-header">
             <div class="panel-title-wrap">
-              <span class="panel-icon">📦</span>
+              <span class="panel-icon" aria-hidden="true"><svg class="zen-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span>
               <h2 class="panel-title">오프라인 문서 본문 캐시 관리</h2>
             </div>
             <span class="queue-status-pill ${totalRemote > 0 && missingCount === 0 && outdatedCount === 0 ? 'pill-success' : 'pill-warning'}">
@@ -284,7 +284,7 @@ const Settings = {
             </span>
           </div>
           <p class="panel-desc">
-            IndexedDB(<code>ZenReaderDB</code>)에 저장된 문서 본문·이미지 캐시 현황입니다. 미저장·수정 문서만 골라 증분 저장하거나, 학습 기록(회독수/히트맵)을 100% 유지한 채 문서 캐시만 비울 수 있습니다.
+            IndexedDB(<code>ZenReaderDB</code>)에 저장된 문서 본문·이미지 캐시 현황입니다. 미저장·수정 문서만 골라 증분 저장하거나, 학습 기록(회독수/히트맵)을 유지한 채 문서 캐시만 비울 수 있습니다.
           </p>
 
           <div class="cache-summary-text">
@@ -312,20 +312,20 @@ const Settings = {
           </div>
 
           <div class="cache-actions-row">
-            <button onclick="App.downloadAllForOffline(false)" class="btn btn-primary">
-              📥 미저장·수정 문서 증분 저장
+            <button onclick="App.downloadAllForOffline(false, this)" class="btn btn-primary">
+              미저장·수정 문서 증분 저장
             </button>
-            <button onclick="App.downloadAllForOffline(true)" class="btn btn-secondary">
-              🔄 전체 강제 재다운로드
+            <button onclick="App.downloadAllForOffline(true, this)" class="btn btn-secondary">
+              전체 강제 재다운로드
             </button>
             <button onclick="Settings.pruneOrphans()" class="btn btn-secondary" ${orphanCount === 0 ? 'disabled' : ''}>
-              🧹 고아 문서 정리
+              고아 문서 정리
             </button>
             <button onclick="Settings.clearDocCacheOnly()" class="btn btn-danger-subtle">
-              🗑️ 문서 캐시만 비우기 (학습기록 보존)
+              문서 캐시만 비우기 (학습기록 보존)
             </button>
           </div>
-          <div class="footer-meta-text" style="margin-top: 10px;">
+          <div class="footer-meta-text" style="margin-top: 8px;">
             최근 본문 캐시 시각: <strong>${this.escapeHtml(lastCachedLabel)}</strong>
           </div>
         </div>
@@ -334,16 +334,16 @@ const Settings = {
         <div class="settings-panel">
           <div class="panel-header">
             <div class="panel-title-wrap">
-              <span class="panel-icon">🔐</span>
+              <span class="panel-icon" aria-hidden="true"><svg class="zen-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
               <h2 class="panel-title">PIN 보안 게이트 관리</h2>
             </div>
           </div>
           <div class="panel-footer-actions" style="padding-top: 0;">
             <div class="footer-meta-text">
-              현재 PIN 번호로 안전하게 인증된 상태입니다. 타인 공유 시 즉시 잠글 수 있습니다.
+              현재 PIN 번호로 인증된 상태입니다. 타인 공유 시 즉시 잠글 수 있습니다.
             </div>
             <button onclick="Settings.lockApp()" class="btn btn-danger-subtle">
-              🔒 서재 즉시 잠그기 (로그아웃)
+              서재 즉시 잠그기 (로그아웃)
             </button>
           </div>
         </div>
@@ -358,12 +358,12 @@ const Settings = {
     App.setTheme(theme);
     this.updateThemeButtons(theme);
     const names = {
-      'theme-dark': '🌙 딥 다크 모드 (OLED 절전)',
-      'theme-light': '☀️ 문켄 라이트 모드 (북유럽 서적 질감)',
-      'theme-sepia': '☕ 킨들 세피아 모드 (2700K 웜톤)',
-      'theme-green': '🌲 에버그린 자연 초록 모드 (#b5d692, #a3cca2, #8bc34a)'
+      'theme-dark': '딥 다크 모드',
+      'theme-light': '문켄 라이트 모드',
+      'theme-sepia': '킨들 세피아 모드',
+      'theme-green': '에버그린 모드'
     };
-    App.showToast((names[theme] || theme) + '가 적용되었습니다!');
+    App.showToast((names[theme] || theme) + ' 적용됨');
   },
 
   updateThemeButtons(theme) {
@@ -383,7 +383,7 @@ const Settings = {
   selectFontSize(size, label) {
     App.setFontSize(size);
     this.updateFontButtons(size, label);
-    App.showToast(`🔤 글자 크기가 ${label}로 설정되었습니다.`);
+    App.showToast(`글자 크기: ${label}`);
   },
 
   updateFontButtons(size, label) {
@@ -395,14 +395,16 @@ const Settings = {
 
   async flushOfflineQueueNow() {
     if (!navigator.onLine) {
-      App.showToast('⚠️ 오프라인 상태입니다. 네트워크 연결 후 전송할 수 있습니다.');
+      App.showToast('오프라인 상태입니다. 네트워크 연결 후 전송할 수 있습니다.');
       return;
     }
 
     const btn = document.getElementById('btn-settings-sync-now');
-    if (btn) {
+    if (btn && typeof App !== 'undefined' && App.setButtonLoading) {
+      App.setButtonLoading(btn, true, '서버 전송 중...');
+    } else if (btn) {
       btn.disabled = true;
-      btn.innerHTML = '<span>⏳</span><span>서버 전송 중...</span>';
+      btn.innerHTML = '<span>서버 전송 중...</span>';
     }
 
     try {
@@ -410,10 +412,14 @@ const Settings = {
         await OfflineManager.flushQueue();
       }
       this.load();
-      App.showToast('🎉 오프라인 학습 기록이 Vercel 서버로 동기화 완료되었습니다!');
+      App.showToast('오프라인 학습 기록을 서버로 동기화했습니다.');
     } catch (err) {
-      App.showToast('⚠️ 동기화 실패: ' + err.message);
-      if (btn) btn.disabled = false;
+      App.showToast('동기화 실패: ' + err.message);
+      if (btn && typeof App !== 'undefined' && App.setButtonLoading) {
+        App.setButtonLoading(btn, false);
+      } else if (btn) {
+        btn.disabled = false;
+      }
     }
   },
 
@@ -422,7 +428,7 @@ const Settings = {
     const file = input.files[0];
     try {
       const count = await ZenStorage.importBackupJSON(file);
-      App.showToast(`✨ ${count}건의 학습 기록이 성공적으로 복원되었습니다!`);
+      App.showToast(`${count}건의 학습 기록이 복원되었습니다.`);
       this.load();
       if (typeof App !== 'undefined' && App.loadDocuments) {
         App.loadDocuments();
@@ -436,7 +442,7 @@ const Settings = {
   async pruneOrphans() {
     if (typeof ZenStorage === 'undefined' || typeof ZenStorage.pruneOrphanDocuments !== 'function') {
       if (typeof App !== 'undefined' && App.showToast) {
-        App.showToast('⚠️ 저장소 모듈이 아직 초기화되지 않았습니다.');
+        App.showToast('저장소 모듈이 아직 초기화되지 않았습니다.');
       }
       return 0;
     }
@@ -447,7 +453,7 @@ const Settings = {
 
     if (validIds.length === 0) {
       if (typeof App !== 'undefined' && App.showToast) {
-        App.showToast('⚠️ 유효한 원격 문서 목록이 없어 고아 문서 정리를 건너뛰었습니다.');
+        App.showToast('유효한 원격 문서 목록이 없어 고아 문서 정리를 건너뛰었습니다.');
       }
       return 0;
     }
@@ -460,16 +466,16 @@ const Settings = {
       await this.load();
       if (typeof App !== 'undefined' && App.showToast) {
         if (deletedCount > 0) {
-          App.showToast(`🧹 노션에서 삭제된 고아 문서 캐시 ${deletedCount}건을 정리했습니다.`);
+          App.showToast(`노션에서 삭제된 고아 문서 캐시 ${deletedCount}건을 정리했습니다.`);
         } else {
-          App.showToast('✨ 정리할 고아 문서가 없습니다.');
+          App.showToast('정리할 고아 문서가 없습니다.');
         }
       }
       return deletedCount;
     } catch (err) {
       console.error('[Settings] 고아 문서 정리 오류:', err);
       if (typeof App !== 'undefined' && App.showToast) {
-        App.showToast('⚠️ 고아 문서 정리 실패: ' + err.message);
+        App.showToast('고아 문서 정리 실패: ' + err.message);
       }
       return 0;
     }
@@ -478,7 +484,7 @@ const Settings = {
   async clearDocCacheOnly() {
     if (typeof ZenStorage === 'undefined' || typeof ZenStorage.clearDocumentCache !== 'function') {
       if (typeof App !== 'undefined' && App.showToast) {
-        App.showToast('⚠️ 저장소 모듈이 아직 초기화되지 않았습니다.');
+        App.showToast('저장소 모듈이 아직 초기화되지 않았습니다.');
       }
       return null;
     }
@@ -486,8 +492,8 @@ const Settings = {
     const confirmed = (typeof confirm === 'function')
       ? confirm(
         '다운로드된 문서 본문·이미지 캐시만 삭제하시겠습니까?\n\n' +
-        '✅ 학습 기록(회독수, 공부 시간, 잔디 히트맵, 복습 일정)은 100% 그대로 보존됩니다.\n' +
-        '🗑️ 다운로드된 문서 본문·이미지 캐시만 비워지며, 온라인 시 언제든 다시 저장할 수 있습니다.'
+        '- 학습 기록(회독수, 공부 시간, 잔디 히트맵, 복습 일정)은 그대로 보존됩니다.\n' +
+        '- 다운로드된 문서 본문·이미지 캐시만 비워지며, 온라인 시 다시 저장할 수 있습니다.'
       )
       : true;
     if (!confirmed) return false;
@@ -517,13 +523,13 @@ const Settings = {
 
       await this.load();
       if (typeof App !== 'undefined' && App.showToast) {
-        App.showToast(`🗑️ 문서 캐시 ${clearedCount}건을 비웠습니다. (학습 기록 100% 보존됨)`);
+        App.showToast(`문서 캐시 ${clearedCount}건을 비웠습니다. (학습 기록 보존)`);
       }
       return result;
     } catch (err) {
       console.error('[Settings] 문서 캐시 비우기 오류:', err);
       if (typeof App !== 'undefined' && App.showToast) {
-        App.showToast('⚠️ 문서 캐시 비우기 실패: ' + err.message);
+        App.showToast('문서 캐시 비우기 실패: ' + err.message);
       }
       return null;
     }
@@ -534,7 +540,7 @@ const Settings = {
     localStorage.removeItem('zen_pin_code');
     const modal = document.getElementById('pin-modal');
     if (modal) modal.style.display = 'flex';
-    App.showToast('🔒 서재가 잠금 처리되었습니다. 올바른 PIN 번호가 필요합니다.');
+    App.showToast('서재가 잠금 처리되었습니다. PIN 입력이 필요합니다.');
   },
 
   escapeHtml(str) {

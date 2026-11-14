@@ -1,5 +1,5 @@
 // api/study-log.js - 학습 체크인 기록 수집 API (노션 원본 무손상)
-const { saveLog, readAllLogs } = require('./lib/storage');
+const { saveLog, readAllLogs, updateLogFeedback } = require('./lib/storage');
 const { verifyZenPin } = require('./lib/auth');
 
 module.exports = async function handler(req, res) {
@@ -14,13 +14,29 @@ module.exports = async function handler(req, res) {
   if (req.method === 'POST') {
     try {
       const body = req.body || {};
-      const { docId, docTitle, durationSeconds, reviewCount, feedback, readAt, timestamp, device } = body;
+
+      if (body.action === 'update_feedback') {
+        const { id, docId, feedback } = body;
+        if (!feedback || (!id && !docId)) {
+          return res.status(400).json({ success: false, error: "feedback 및 id 또는 docId가 필요합니다." });
+        }
+        const result = updateLogFeedback({ id, docId, feedback });
+        return res.status(200).json({
+          success: true,
+          updated: result.updated,
+          message: result.updated ? "기억 체감도가 수정되었습니다." : "대상 학습 기록을 찾지 못했습니다.",
+          log: result.log
+        });
+      }
+
+      const { id, docId, docTitle, durationSeconds, reviewCount, feedback, readAt, timestamp, device } = body;
 
       if (!docId) {
         return res.status(400).json({ success: false, error: "docId가 누락되었습니다." });
       }
 
       const saved = saveLog({
+        id,
         docId,
         docTitle: docTitle || "제목 없음",
         durationSeconds: durationSeconds || 60,

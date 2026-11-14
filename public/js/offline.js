@@ -254,10 +254,12 @@ const OfflineManager = {
   async savePermanentLocalLog(payload) {
     const nowIso = new Date().toISOString();
     const logRecord = {
+      clientLogId: payload.clientLogId || payload.id || null,
       docId: payload.docId,
       docTitle: payload.docTitle,
       durationSeconds: payload.durationSeconds || 0,
       reviewCount: payload.reviewCount || 1,
+      feedback: payload.feedback || 'good',
       device: payload.device || 'alldocube-iplay60',
       timestamp: nowIso,
       readAt: nowIso,
@@ -296,6 +298,75 @@ const OfflineManager = {
       queuedAt: new Date().toISOString()
     });
     localStorage.setItem(this.QUEUE_KEY, JSON.stringify(queue));
+  },
+
+  // 동일 세션 내 기억 체감도 수정 (큐에 미전송 기록이 있으면 제자리 갱신, 이미 서버 전송되었으면 update_feedback 요청)
+  async updateStudyLogFeedback({ id, clientLogId, docId, feedback } = {}) {
+    const validFeedbacks = new Set(['easy', 'good', 'hard']);
+    if (!validFeedbacks.has(feedback)) {
+      return { success: false, error: '유효하지 않은 피드백 값입니다.' };
+    }
+
+    const queue = this.getQueue();
+    const targetId = clientLogId || id;
+    const queuedIdx = queue.findIndex(item =>
+      (targetId && (item.clientLogId === targetId || item.id === targetId)) ||
+      (id && item.id === id)
+    );
+
+    if (queuedIdx !== -1) {
+      queue[queuedIdx].feedback = feedback;
+      queue[queuedIdx].feedbackUpdatedAt = new Date().toISOString();
+      localStorage.setItem(this.QUEUE_KEY, JSON.stringify(queue));
+      return { success: true, queued: true, updatedInQueue: true };
+    }
+
+    const updatePayload = {
+      action: 'update_feedback',
+      id: targetId || null,
+      clientLogId: clientLogId || null,
+      docId: docId || null,
+      feedback
+    };
+
+    const enqueueUpdate = () => {
+      const latestQueue = this.getQueue();
+      const existingUpdateIdx = latestQueue.findIndex(item =>
+        item.action === 'update_feedback' &&
+        ((targetId && (item.id === targetId || item.clientLogId === targetId)) || (!targetId && docId && item.docId === docId))
+      );
+      if (existingUpdateIdx !== -1) {
+        latestQueue[existingUpdateIdx].feedback = feedback;
+        latestQueue[existingUpdateIdx].queuedAt = new Date().toISOString();
+      } else {
+        latestQueue.push({
+          ...updatePayload,
+          queuedAt: new Date().toISOString()
+        });
+      }
+      localStorage.setItem(this.QUEUE_KEY, JSON.stringify(latestQueue));
+    };
+
+    if (!this.isOnline) {
+      enqueueUpdate();
+      return { success: true, queued: true };
+    }
+
+    try {
+      const response = await fetch('/api/study-log', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-zen-pin': localStorage.getItem('zen_pin_code') || ''
+        },
+        body: JSON.stringify(updatePayload)
+      });
+      return await response.json();
+    } catch (err) {
+      console.warn('[offline] 서버 피드백 수정 전송 실패, 로컬 큐에 보관:', err.message);
+      enqueueUpdate();
+      return { success: true, queued: true };
+    }
   },
 
   getQueue() {

@@ -4,16 +4,55 @@ const App = {
   documents: [],
   filteredDocuments: [],
   selectedStatus: 'all',     // 'all' | '완료' | '진행 중' | '시작 전'
+  onlyOfflineCached: false,  // 오프라인 열람 가능 문서만 모아보기 토글
   sortOrder: 'created_desc',  // 'created_desc' | 'created_asc' | 'updated_desc' | 'title_asc'
   searchQuery: '',
   deferredInstallPrompt: null,
   offlineDocIds: new Set(),
   isTagSheetOpen: false,
+  _isRefreshingDocs: false,
+  _isBatchCaching: false,
+
+  setButtonLoading(target, isLoading, loadingText = null) {
+    if (typeof document === 'undefined' || !document.getElementById) return;
+    const el = typeof target === 'string' ? document.getElementById(target) : target;
+    if (!el) return;
+
+    if (isLoading) {
+      if (el.dataset && loadingText !== null) {
+        if (!el.dataset.originalLabel) el.dataset.originalLabel = el.innerText || '';
+        el.innerText = loadingText;
+      }
+      el.disabled = true;
+      if (typeof el.setAttribute === 'function') el.setAttribute('aria-busy', 'true');
+      if (el.classList && typeof el.classList.add === 'function') {
+        el.classList.add('is-loading');
+        el.classList.add('spinning');
+      }
+    } else {
+      el.disabled = false;
+      if (typeof el.removeAttribute === 'function') el.removeAttribute('aria-busy');
+      if (el.classList && typeof el.classList.remove === 'function') {
+        el.classList.remove('is-loading');
+        el.classList.remove('spinning');
+      }
+      if (el.dataset && el.dataset.originalLabel !== undefined) {
+        el.innerText = el.dataset.originalLabel;
+        delete el.dataset.originalLabel;
+      }
+    }
+  },
 
   init() {
     this.initSecurity();
     this.initTheme();
     this.initPWA();
+    try {
+      if (typeof localStorage !== 'undefined') {
+        this.onlyOfflineCached = localStorage.getItem('zen_filter_offline_only') === 'true';
+      }
+    } catch (e) {}
+    this.updateOfflineOnlyButtonUI();
     if (typeof ZenStorage !== 'undefined') {
       ZenStorage.init().catch(console.warn);
     }
@@ -132,9 +171,16 @@ const App = {
       });
     }
 
-    // 이미 서재 화면이 렌더링된 상태라면 오프라인 배지 반영
+    this.updateOfflineOnlyButtonUI();
+    this.updateStatusPillCounts();
+
+    // 이미 서재 화면이 렌더링된 상태라면 오프라인 배지/필터 반영
     if (!skipRender && this.currentView === 'list' && this.documents && this.documents.length > 0) {
-      this.renderDocumentList();
+      if (this.onlyOfflineCached) {
+        this.applyFilterAndSort();
+      } else {
+        this.renderDocumentList();
+      }
     }
     return this.offlineDocIds;
   },
@@ -249,16 +295,16 @@ const App = {
   toggleTheme() {
     if (document.body.classList.contains('theme-dark')) {
       this.setTheme('theme-light');
-      this.showToast('☀️ 문켄 라이트 모드');
+      this.showToast('문켄 라이트 모드 적용');
     } else if (document.body.classList.contains('theme-light')) {
       this.setTheme('theme-sepia');
-      this.showToast('☕ 킨들 세피아 독서 모드');
+      this.showToast('킨들 세피아 모드 적용');
     } else if (document.body.classList.contains('theme-sepia')) {
       this.setTheme('theme-green');
-      this.showToast('🌲 에버그린 자연 초록 모드');
+      this.showToast('에버그린 자연 초록 모드 적용');
     } else {
       this.setTheme('theme-dark');
-      this.showToast('🌙 딥 다크 모드');
+      this.showToast('딥 다크 모드 적용');
     }
   },
 
@@ -274,13 +320,13 @@ const App = {
   cycleFontSize() {
     if (document.body.classList.contains('font-sm')) {
       this.setFontSize('font-md');
-      this.showToast('🔤 글자 크기: 보통');
+      this.showToast('글자 크기: 보통');
     } else if (document.body.classList.contains('font-md')) {
       this.setFontSize('font-lg');
-      this.showToast('🔤 글자 크기: 크게 (8.4인치 권장)');
+      this.showToast('글자 크기: 크게 (8.4인치 권장)');
     } else {
       this.setFontSize('font-sm');
-      this.showToast('🔤 글자 크기: 작게');
+      this.showToast('글자 크기: 작게');
     }
   },
 
@@ -401,7 +447,22 @@ const App = {
   },
 
   // 4. 노션 문서 목록 로딩 (새 글 반영용 forceRefresh 옵션, SWR 비파괴 캐시 렌더링 및 수정 변경 감지)
-  async loadDocuments(forceRefresh = false) {
+  async loadDocuments(forceRefresh = false, triggerBtn = null) {
+    if (forceRefresh) {
+      if (this._isRefreshingDocs) {
+        if (typeof this.showToast === 'function') {
+          this.showToast('노션 동기화가 이미 진행 중입니다.');
+        }
+        return;
+      }
+      this._isRefreshingDocs = true;
+      this.setButtonLoading('header-refresh-btn', true);
+      if (triggerBtn) this.setButtonLoading(triggerBtn, true, '대조 중...');
+      if (typeof this.showToast === 'function') {
+        this.showToast('노션 DB와 변경사항을 대조하는 중...');
+      }
+    }
+
     const listContainer = (typeof document !== 'undefined' && document.getElementById)
       ? document.getElementById('doc-card-list')
       : null;
@@ -509,9 +570,9 @@ const App = {
       this.applyFilterAndSort();
       if (forceRefresh) {
         if (updatedDocsCount > 0) {
-          this.showToast(`✨ 최신 노션 지식 DB 동기화 완료 (수정된 문서 ${updatedDocsCount}건 감지)`);
+          this.showToast(`노션 동기화 완료 · 수정된 문서 ${updatedDocsCount}건 감지`);
         } else {
-          this.showToast(`✨ 최신 노션 지식 DB 동기화 완료 (${data.documents.length}개 문서)`);
+          this.showToast(`노션 동기화 완료 (${data.documents.length}개 문서 최신)`);
         }
       }
     } catch (err) {
@@ -522,7 +583,7 @@ const App = {
         this.updateStatusPillCounts();
         this.applyFilterAndSort();
         if (!err.isUnauthorized) {
-          this.showToast('📡 오프라인 모드: 저장된 서재 목록을 표시합니다.');
+          this.showToast('오프라인 모드: 저장된 서재 목록을 표시합니다.');
         }
         return;
       }
@@ -534,6 +595,12 @@ const App = {
             <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 6px;">${this.escapeHtml(err.message)}</p>
           </div>
         `;
+      }
+    } finally {
+      if (forceRefresh) {
+        this._isRefreshingDocs = false;
+        this.setButtonLoading('header-refresh-btn', false);
+        if (triggerBtn) this.setButtonLoading(triggerBtn, false);
       }
     }
   },
@@ -655,18 +722,53 @@ const App = {
     this.applyFilterAndSort();
   },
 
+  updateOfflineOnlyButtonUI() {
+    if (typeof document === 'undefined' || !document.getElementById) return;
+    const btn = document.getElementById('btn-offline-only-filter');
+    if (btn && btn.classList) {
+      if (this.onlyOfflineCached) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    }
+  },
+
+  // 오프라인 열람 가능 문서만 모아보기 필터 토글
+  toggleOfflineOnlyFilter(forceState) {
+    const nextState = typeof forceState === 'boolean' ? forceState : !this.onlyOfflineCached;
+    this.onlyOfflineCached = nextState;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('zen_filter_offline_only', String(nextState));
+      }
+    } catch (e) {}
+
+    this.updateOfflineOnlyButtonUI();
+    this.updateStatusPillCounts();
+    this.applyFilterAndSort();
+
+    if (typeof this.showToast === 'function') {
+      if (nextState) {
+        this.showToast(`오프라인 열람 가능 문서만 보기 (${this.filteredDocuments.length}건)`);
+      } else {
+        this.showToast('전체 서재 목록 보기로 전환했습니다.');
+      }
+    }
+  },
+
   // 정렬 기준 변경 ('created_desc' | 'created_asc' | 'updated_desc' | 'title_asc')
   setSortOrder(order) {
     this.sortOrder = order;
     this.applyFilterAndSort();
     if (order === 'updated_desc') {
-      this.showToast('🔄 최근 수정순 정렬 (수정일자 표시)');
+      this.showToast('최근 수정순 정렬');
     } else if (order === 'created_desc') {
-      this.showToast('📅 생성일 최신순 정렬 (생성일자 표시)');
+      this.showToast('생성일 최신순 정렬');
     } else if (order === 'created_asc') {
-      this.showToast('📅 생성일 과거순 정렬 (생성일자 표시)');
+      this.showToast('생성일 과거순 정렬');
     } else if (order === 'title_asc') {
-      this.showToast('🔤 가나다순 정렬');
+      this.showToast('가나다순 정렬');
     }
   },
 
@@ -687,7 +789,7 @@ const App = {
       this.searchQuery = '';
       if (searchInput) searchInput.value = '';
       this.applyFilterAndSort();
-      this.showToast('🏷️ 태그 필터 해제 (전체 보기)');
+      this.showToast('태그 필터 해제 (전체 보기)');
       return;
     }
 
@@ -704,7 +806,7 @@ const App = {
     });
     this.applyFilterAndSort();
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    this.showToast(`🏷️ '#${cleanTag}' 태그 필터 적용 (${this.filteredDocuments.length}건)`);
+    this.showToast(`#${cleanTag} 태그 필터 적용 (${this.filteredDocuments.length}건)`);
   },
 
   // 검색어, 상태 필터, 정렬 기준 종합 적용
@@ -712,8 +814,17 @@ const App = {
     const q = this.searchQuery.trim().toLowerCase();
     const cleanQ = q.startsWith('#') ? q.slice(1).trim() : q;
 
-    // 1) 검색어 및 상태 필터링
+    // 1) 검색어, 오프라인 캐시 및 상태 필터링
     let list = this.documents.filter(doc => {
+      // 오프라인 열람 가능 필터 검사
+      if (this.onlyOfflineCached) {
+        const isCached = Boolean(
+          doc.isCachedLocally ||
+          (this.offlineDocIds && typeof this.offlineDocIds.has === 'function' && this.offlineDocIds.has(doc.id))
+        );
+        if (!isCached) return false;
+      }
+
       // 상태 필터 검사
       if (this.selectedStatus !== 'all') {
         const docStatus = doc.status || '시작 전';
@@ -762,12 +873,18 @@ const App = {
   },
 
   updateStatusPillCounts() {
-    let countTotal = this.documents.length;
+    const isCachedDoc = (d) => Boolean(
+      d && (d.isCachedLocally || (this.offlineDocIds && typeof this.offlineDocIds.has === 'function' && this.offlineDocIds.has(d.id)))
+    );
+    const offlineCount = this.documents.filter(isCachedDoc).length;
+    const baseDocs = this.onlyOfflineCached ? this.documents.filter(isCachedDoc) : this.documents;
+
+    let countTotal = baseDocs.length;
     let countDone = 0;
     let countProgress = 0;
     let countTodo = 0;
 
-    this.documents.forEach(d => {
+    baseDocs.forEach(d => {
       const s = d.status || '';
       if (s.includes('완료') || s.includes('Done') || s.includes('Complete')) countDone++;
       else if (s.includes('진행') || s.includes('Progress')) countProgress++;
@@ -775,13 +892,14 @@ const App = {
     });
 
     const setTxt = (id, txt) => {
-      const el = document.getElementById(id);
+      const el = (typeof document !== 'undefined' && document.getElementById) ? document.getElementById(id) : null;
       if (el) el.innerText = txt;
     };
     setTxt('count-all', countTotal);
     setTxt('count-done', countDone);
     setTxt('count-progress', countProgress);
     setTxt('count-todo', countTodo);
+    setTxt('count-offline', offlineCount);
   },
 
   renderDocumentList() {
@@ -790,7 +908,16 @@ const App = {
       : null;
     if (!listContainer) return;
     if (this.filteredDocuments.length === 0) {
-      listContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-muted);">조건에 맞는 문서가 없습니다.</div>';
+      if (this.onlyOfflineCached) {
+        listContainer.innerHTML = `
+          <div style="text-align: center; padding: 36px 20px; color: var(--text-muted);">
+            <div style="margin-bottom: 10px; font-size: 0.9rem;">현재 조건에 맞는 오프라인 저장 문서가 없습니다.</div>
+            <button class="btn btn-sm" onclick="App.toggleOfflineOnlyFilter(false)">전체 문서 보기</button>
+          </div>
+        `;
+      } else {
+        listContainer.innerHTML = '<div style="text-align: center; padding: 36px 20px; color: var(--text-muted); font-size: 0.9rem;">조건에 맞는 문서가 없습니다.</div>';
+      }
       return;
     }
 
@@ -802,36 +929,39 @@ const App = {
       html += `
         <div class="doc-update-alert-banner">
           <div class="update-banner-content">
-            <span class="update-banner-icon">⚡</span>
-            <span class="update-banner-text">노션에서 수정된 문서 <strong>${modifiedDocs.length}건</strong>이 감지되었습니다.</span>
+            <span class="update-banner-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </span>
+            <span class="update-banner-text">노션에서 수정된 문서 <strong>${modifiedDocs.length}건</strong>이 있습니다.</span>
           </div>
-          <button class="btn btn-update-all" onclick="event.stopPropagation(); App.updateModifiedDocs()">
-            ⚡ 수정된 ${modifiedDocs.length}개 일괄 최신화
+          <button class="btn btn-update-all" onclick="event.stopPropagation(); App.updateModifiedDocs(this)">
+            수정된 ${modifiedDocs.length}개 일괄 최신화
           </button>
         </div>
       `;
     }
 
     const isOffline = (typeof navigator !== 'undefined' && navigator.onLine === false);
+    const updatedIconSvg = '<svg class="zen-svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>';
 
     this.filteredDocuments.forEach(doc => {
       const lastDate = doc.lastReviewedAt ? new Date(doc.lastReviewedAt).toLocaleDateString() : '미학습';
 
-      // 1안 적용: 정렬 기준에 따른 스마트 날짜 전환 (수정순 정렬 시 🔄 수정일자 강조)
+      // 1안 적용: 정렬 기준에 따른 스마트 날짜 전환 (수정순 정렬 시 수정일자 강조)
       let dateBadgeHtml = '';
       if (this.sortOrder === 'updated_desc') {
         const updatedDate = this.formatShortDate(doc.updatedAt || doc.createdAt);
         const createdDate = this.formatShortDate(doc.createdAt);
         if (updatedDate) {
           const tooltip = createdDate ? `최근 수정: ${updatedDate} (최초 생성: ${createdDate})` : `최근 수정: ${updatedDate}`;
-          dateBadgeHtml = `<span class="doc-date-badge date-updated" title="${tooltip}" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; font-size: 0.75rem; font-weight: 600;">🔄 ${updatedDate}</span>`;
+          dateBadgeHtml = `<span class="doc-date-badge date-updated" title="${tooltip}" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; font-weight: 600;">${updatedIconSvg}<span>${updatedDate}</span></span>`;
         }
       } else {
         const createdDate = this.formatShortDate(doc.createdAt);
         const updatedDate = this.formatShortDate(doc.updatedAt);
         if (createdDate) {
           const tooltip = (updatedDate && updatedDate !== createdDate) ? `최초 생성: ${createdDate} (최근 수정: ${updatedDate})` : `생성: ${createdDate}`;
-          dateBadgeHtml = `<span class="doc-date-badge date-created" title="${tooltip}" style="color: var(--text-muted); font-size: 0.75rem; flex-shrink: 0;">${createdDate}</span>`;
+          dateBadgeHtml = `<span class="doc-date-badge date-created" title="${tooltip}" style="color: var(--text-muted); flex-shrink: 0;">${createdDate}</span>`;
         }
       }
 
@@ -847,30 +977,30 @@ const App = {
         cardStatusClass = 'card-status-진행중';
       }
 
-      // 회독수 뱃지 (상단 우측 상태 뱃지 좌측에 고정 배치하여 하단 태그 밀림 원천 차단)
+      // 회독수 뱃지 (상단 우측 상태 뱃지 좌측에 고정 배치)
       const reviewBadge = doc.reviewCount > 0
-        ? `<span class="doc-review-badge">🏆 ${doc.reviewCount}회독</span>`
+        ? `<span class="doc-review-badge">${doc.reviewCount}회독</span>`
         : '';
 
       // 노션 수정 감지 뱃지 및 인디케이터 클래스
       const updatedBadge = doc.hasUpdate
-        ? `<span class="badge-doc-updated" title="노션에서 최신 내용으로 수정되었습니다. (클릭 시 즉시 열람 및 최신 반영)">✨ 수정됨</span>`
+        ? `<span class="badge-doc-updated" title="노션에서 최신 내용으로 수정되었습니다."><span class="status-dot dot-warn" aria-hidden="true"></span>수정됨</span>`
         : '';
       const updateClass = doc.hasUpdate ? 'card-has-update' : '';
 
-      // 오프라인 시 미저장 문서 구분 표시 (온라인 시 v17 카드 레이아웃 100% 유지)
+      // 오프라인 시 미저장 문서 구분 표시
       const isCachedOffline = Boolean(
         this.offlineDocIds && typeof this.offlineDocIds.has === 'function' && this.offlineDocIds.has(doc.id)
       );
       const isOfflineUnavailable = isOffline && !isCachedOffline;
       const offlineClass = isOfflineUnavailable ? 'card-offline-unavailable' : '';
       const uncachedBadge = isOfflineUnavailable
-        ? `<span class="badge-doc-uncached" title="오프라인 저장되지 않은 문서입니다">☁️ 미저장</span>`
+        ? `<span class="badge-doc-uncached" title="오프라인 저장되지 않은 문서입니다">미저장</span>`
         : '';
 
       html += `
         <div class="doc-card ${cardStatusClass} ${updateClass}${offlineClass ? ' ' + offlineClass : ''}" onclick="Reader.open('${doc.id}')">
-          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px;">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 4px;">
             <div class="doc-card-title" style="margin-bottom: 0; flex: 1 1 auto; min-width: 0; word-break: keep-all; overflow-wrap: break-word;">
               ${this.escapeHtml(doc.title)}
               ${updatedBadge}${uncachedBadge ? '\n              ' + uncachedBadge : ''}
@@ -897,65 +1027,71 @@ const App = {
   },
 
   // 4-1. 노션에서 수정 감지된 문서들만 정밀 일괄 최신화 (300ms Pacing + 429 원천 차단)
-  async updateModifiedDocs() {
+  async updateModifiedDocs(triggerBtn = null) {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-      this.showToast('⚠️ 오프라인 상태에서는 일괄 최신화를 진행할 수 없습니다.');
+      this.showToast('오프라인 상태에서는 일괄 최신화를 진행할 수 없습니다.');
       return;
     }
 
     const modifiedList = this.documents.filter(d => d.hasUpdate);
     if (modifiedList.length === 0) {
-      this.showToast('✨ 이미 모든 문서가 최신 상태입니다.');
+      this.showToast('이미 모든 문서가 최신 상태입니다.');
       return;
     }
 
     const count = modifiedList.length;
-    this.showToast(`⚡ 수정된 문서 ${count}건 일괄 최신화 시작...`);
+    this.setButtonLoading(triggerBtn, true, `최신화 중 (0/${count})`);
+    this.showToast(`수정된 문서 ${count}건 일괄 최신화 시작...`);
 
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
     let successCount = 0;
     let failCount = 0;
 
-    for (let i = 0; i < count; i++) {
-      const doc = modifiedList[i];
-      try {
-        const res = await fetch(`/api/documents/${doc.id}?refresh=true`, {
-          headers: {
-            'x-zen-pin': (typeof localStorage !== 'undefined' && localStorage.getItem('zen_pin_code')) || ''
-          }
-        });
-        if (res && res.ok !== false) {
-          const data = await res.json();
-          if (data && data.success !== false && data.document) {
-            if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.saveDocument === 'function') {
-              await ZenStorage.saveDocument(data.document);
+    try {
+      for (let i = 0; i < count; i++) {
+        const doc = modifiedList[i];
+        try {
+          const res = await fetch(`/api/documents/${doc.id}?refresh=true`, {
+            headers: {
+              'x-zen-pin': (typeof localStorage !== 'undefined' && localStorage.getItem('zen_pin_code')) || ''
             }
-            if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.prefetchDocumentImages === 'function') {
-              ZenStorage.prefetchDocumentImages(data.document, 3).catch(() => {});
+          });
+          if (res && res.ok !== false) {
+            const data = await res.json();
+            if (data && data.success !== false && data.document) {
+              if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.saveDocument === 'function') {
+                await ZenStorage.saveDocument(data.document);
+              }
+              if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.prefetchDocumentImages === 'function') {
+                ZenStorage.prefetchDocumentImages(data.document, 3).catch(() => {});
+              }
+              this.setDocSyncMap(doc.id, data.document.updatedAt || doc.updatedAt);
+              doc.hasUpdate = false;
+              doc.isCachedLocally = true;
+              if (data.document.updatedAt) doc.updatedAt = data.document.updatedAt;
+              successCount++;
+            } else {
+              failCount++;
             }
-            this.setDocSyncMap(doc.id, data.document.updatedAt || doc.updatedAt);
-            doc.hasUpdate = false;
-            doc.isCachedLocally = true;
-            if (data.document.updatedAt) doc.updatedAt = data.document.updatedAt;
-            successCount++;
           } else {
             failCount++;
           }
-        } else {
+        } catch (err) {
+          console.warn('[App] 문서 최신화 실패:', doc.title, err);
           failCount++;
         }
-      } catch (err) {
-        console.warn('[App] 문서 최신화 실패:', doc.title, err);
-        failCount++;
-      }
 
-      const current = i + 1;
-      const pct = Math.round((current / count) * 100);
-      this.showToast(`⚡ 수정 문서 최신화 중... ${current}/${count} (${pct}%)`);
+        const current = i + 1;
+        const pct = Math.round((current / count) * 100);
+        if (triggerBtn) triggerBtn.innerText = `최신화 중 (${current}/${count})`;
+        this.showToast(`수정 문서 최신화 중... ${current}/${count} (${pct}%)`);
 
-      if (i < count - 1) {
-        await sleep(300); // 300ms Pacing
+        if (i < count - 1) {
+          await sleep(300); // 300ms Pacing
+        }
       }
+    } finally {
+      this.setButtonLoading(triggerBtn, false);
     }
 
     await this.refreshOfflineDocIds(true);
@@ -963,9 +1099,9 @@ const App = {
     this.applyFilterAndSort();
 
     if (failCount === 0) {
-      this.showToast(`🎉 수정된 ${successCount}건의 문서가 모두 최신 버전으로 반영되었습니다!`);
+      this.showToast(`수정된 ${successCount}건의 문서를 모두 최신 버전으로 반영했습니다.`);
     } else {
-      this.showToast(`⚠️ 최신화 완료: 성공 ${successCount}건 / 실패 ${failCount}건`);
+      this.showToast(`최신화 완료: 성공 ${successCount}건 / 실패 ${failCount}건`);
     }
   },
 
@@ -1001,16 +1137,29 @@ const App = {
       });
     };
 
+    const triggerViewReveal = (el) => {
+      if (!el || !el.classList || typeof el.classList.remove !== 'function') return;
+      el.classList.remove('view-enter');
+      void el.offsetWidth;
+      el.classList.add('view-enter');
+    };
+
     if (viewName === 'reader') {
       if (listView) listView.style.display = 'none';
-      if (readerView) readerView.style.display = 'block';
+      if (readerView) {
+        readerView.style.display = 'block';
+        triggerViewReveal(readerView);
+      }
       if (dashboardView) dashboardView.style.display = 'none';
       if (settingsView) settingsView.style.display = 'none';
     } else if (viewName === 'dashboard') {
       Reader.cleanup();
       if (listView) listView.style.display = 'none';
       if (readerView) readerView.style.display = 'none';
-      if (dashboardView) dashboardView.style.display = 'block';
+      if (dashboardView) {
+        dashboardView.style.display = 'block';
+        triggerViewReveal(dashboardView);
+      }
       if (settingsView) settingsView.style.display = 'none';
       updateTabs(tabDashboard);
       if (typeof Dashboard !== 'undefined' && Dashboard.load) {
@@ -1021,7 +1170,10 @@ const App = {
       if (listView) listView.style.display = 'none';
       if (readerView) readerView.style.display = 'none';
       if (dashboardView) dashboardView.style.display = 'none';
-      if (settingsView) settingsView.style.display = 'block';
+      if (settingsView) {
+        settingsView.style.display = 'block';
+        triggerViewReveal(settingsView);
+      }
       updateTabs(tabSettings);
       if (typeof Settings !== 'undefined' && Settings.load) {
         Settings.load();
@@ -1029,7 +1181,10 @@ const App = {
     } else {
       // list (서재)
       Reader.cleanup();
-      if (listView) listView.style.display = 'block';
+      if (listView) {
+        listView.style.display = 'block';
+        triggerViewReveal(listView);
+      }
       if (readerView) readerView.style.display = 'none';
       if (dashboardView) dashboardView.style.display = 'none';
       if (settingsView) settingsView.style.display = 'none';
@@ -1123,9 +1278,14 @@ const App = {
   },
 
   // 140개 전 문서 오프라인 증분/전체 사전 캐싱 (350ms Pacing + 429 지수 백오프 재시도 + WakeLock + Delta Sync)
-  async downloadAllForOffline(forceAll = false) {
+  async downloadAllForOffline(forceAll = false, triggerBtn = null) {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-      this.showToast('⚠️ 오프라인 상태에서는 일괄 다운로드를 할 수 없습니다.');
+      this.showToast('오프라인 상태에서는 일괄 다운로드를 할 수 없습니다.');
+      return;
+    }
+
+    if (this._isBatchCaching) {
+      this.showToast('오프라인 저장 작업이 이미 진행 중입니다.');
       return;
     }
 
@@ -1185,7 +1345,10 @@ const App = {
     }
 
     const total = targetDocs.length;
-    this.showToast(`📦 오프라인 캐싱 시작 (대상 ${total}개)...`);
+    this._isBatchCaching = true;
+    this.setButtonLoading('header-offline-btn', true);
+    if (triggerBtn) this.setButtonLoading(triggerBtn, true, '저장 중...');
+    this.showToast(`오프라인 캐싱 시작 (대상 ${total}개)...`);
     let successCount = 0;
     let failCount = 0;
 
@@ -1292,10 +1455,10 @@ const App = {
           failCount++;
         }
 
-        // 세련된 진행률 표시: 📦 오프라인 캐싱 중... 45/140 (32%)
+        // 진행률 표시
         const current = i + 1;
         const pct = Math.round((current / total) * 100);
-        this.showToast(`📦 오프라인 캐싱 중... ${current}/${total} (${pct}%)`);
+        this.showToast(`오프라인 캐싱 중... ${current}/${total} (${pct}%)`);
 
         // 연속 호출 시 문서 간 350ms 페이싱(Pacing) 딜레이 주입 (마지막 문서 직후에는 생략)
         if (i < total - 1) {
@@ -1303,6 +1466,9 @@ const App = {
         }
       }
     } finally {
+      this._isBatchCaching = false;
+      this.setButtonLoading('header-offline-btn', false);
+      if (triggerBtn) this.setButtonLoading(triggerBtn, false);
       if (wakeLockSentinel && typeof wakeLockSentinel.release === 'function') {
         try {
           await wakeLockSentinel.release();
@@ -1316,9 +1482,9 @@ const App = {
     }
 
     if (failCount === 0) {
-      this.showToast(`🎉 총 ${successCount}개 문서 오프라인 저장 완료! 이제 인터넷 없이도 모든 문서를 읽을 수 있습니다.`);
+      this.showToast(`총 ${successCount}개 문서 오프라인 저장을 완료했습니다.`);
     } else {
-      this.showToast(`⚠️ 오프라인 캐싱 완료: 성공 ${successCount}개 / 실패 ${failCount}개 (인터넷 없이 열람 가능)`);
+      this.showToast(`오프라인 캐싱 완료: 성공 ${successCount}개 / 실패 ${failCount}개`);
     }
   },
 

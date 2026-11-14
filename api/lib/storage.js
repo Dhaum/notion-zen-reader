@@ -40,8 +40,31 @@ function readAllLogs() {
   return inMemoryLogs || [...DEFAULT_LOGS];
 }
 
+function _persistLogs(logs) {
+  inMemoryLogs = logs;
+  try {
+    if (fs.existsSync(DATA_DIR)) {
+      fs.writeFileSync(LOG_FILE, JSON.stringify(logs, null, 2), 'utf8');
+    }
+  } catch (err) {
+    console.warn('[study-tracker] 로그 파일 쓰기 실패 (메모리만 갱신):', err.message);
+  }
+}
+
 function saveLog(entry) {
   const logs = readAllLogs();
+  if (entry.id) {
+    const existing = logs.find(l => l.id === entry.id);
+    if (existing) {
+      if (entry.feedback) {
+        existing.feedback = entry.feedback;
+        existing.feedbackUpdatedAt = new Date().toISOString();
+      }
+      _persistLogs(logs);
+      return existing;
+    }
+  }
+
   const newLog = {
     id: entry.id || ('log-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)),
     docId: entry.docId,
@@ -54,17 +77,34 @@ function saveLog(entry) {
   };
 
   logs.unshift(newLog); // 최신순 삽입
-  inMemoryLogs = logs;
-
-  try {
-    if (fs.existsSync(DATA_DIR)) {
-      fs.writeFileSync(LOG_FILE, JSON.stringify(logs, null, 2), 'utf8');
-    }
-  } catch (err) {
-    console.warn('[study-tracker] 로그 파일 쓰기 실패 (메모리만 갱신):', err.message);
-  }
+  _persistLogs(logs);
 
   return newLog;
+}
+
+function updateLogFeedback({ id, docId, feedback }) {
+  const validFeedbacks = new Set(['easy', 'good', 'hard']);
+  if (!validFeedbacks.has(feedback)) {
+    return { updated: false, log: null };
+  }
+
+  const logs = readAllLogs();
+  let target = null;
+  if (id) {
+    target = logs.find(l => l.id === id) || null;
+  }
+  if (!target && docId) {
+    target = logs.find(l => l.docId === docId) || null;
+  }
+  if (!target) {
+    return { updated: false, log: null };
+  }
+
+  target.feedback = feedback;
+  target.feedbackUpdatedAt = new Date().toISOString();
+  _persistLogs(logs);
+
+  return { updated: true, log: target };
 }
 
 // 통계 분석 엔진 (데스크탑 대시보드 및 복습 추천 산출)
@@ -147,5 +187,6 @@ function calculateStats() {
 module.exports = {
   readAllLogs,
   saveLog,
+  updateLogFeedback,
   calculateStats
 };

@@ -261,6 +261,7 @@ const ZenStorage = {
     const nowIso = new Date().toISOString();
 
     const newLog = {
+      clientLogId: entry.clientLogId || entry.id || null,
       docId: entry.docId,
       docTitle: entry.docTitle || '제목 없음',
       readAt: entry.readAt || nowIso,
@@ -272,7 +273,9 @@ const ZenStorage = {
     };
 
     const recordId = await this.putLog(newLog);
-    newLog.id = recordId;
+    if (recordId != null) {
+      newLog.id = recordId;
+    }
 
     // 2중 안전망: localStorage 미러링
     try {
@@ -284,6 +287,65 @@ const ZenStorage = {
 
     console.log(`[ZenStorage] 태블릿 영구 저장 완료: ${newLog.docTitle} (회독: ${newLog.reviewCount})`);
     return newLog;
+  },
+
+  // 2-1. 직전/현재 세션 학습 로그의 기억 체감도 수정 (회독수 중복 증가 없음)
+  async updateLogFeedback(logIdentifier, feedback) {
+    const validFeedbacks = new Set(['easy', 'good', 'hard']);
+    if (!validFeedbacks.has(feedback)) {
+      return { updated: false, log: null };
+    }
+
+    const opts = (logIdentifier && typeof logIdentifier === 'object')
+      ? logIdentifier
+      : { id: logIdentifier, clientLogId: logIdentifier };
+    const { id, clientLogId, docId } = opts;
+
+    let updatedLog = null;
+    try {
+      if (!this.db) await this.openDB();
+      const allLogs = await this.getAllLogs();
+      let target = null;
+      if (id != null) {
+        target = allLogs.find(l => l.id === id) || null;
+      }
+      if (!target && clientLogId) {
+        target = allLogs.find(l => l.clientLogId === clientLogId) || null;
+      }
+      if (!target && docId) {
+        target = allLogs.find(l => l.docId === docId) || null;
+      }
+      if (target) {
+        target.feedback = feedback;
+        target.feedbackUpdatedAt = new Date().toISOString();
+        await this.putLog(target);
+        updatedLog = target;
+      }
+    } catch (err) {
+      console.warn('[ZenStorage] IndexedDB 피드백 수정 실패:', err);
+    }
+
+    let lsUpdated = false;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem('zen_permanent_logs');
+        const list = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(list) && list.length > 0) {
+          let lsTarget = null;
+          if (id != null) lsTarget = list.find(l => l.id === id) || null;
+          if (!lsTarget && clientLogId) lsTarget = list.find(l => l.clientLogId === clientLogId) || null;
+          if (!lsTarget && docId) lsTarget = list.find(l => l.docId === docId) || null;
+          if (lsTarget) {
+            lsTarget.feedback = feedback;
+            lsTarget.feedbackUpdatedAt = new Date().toISOString();
+            localStorage.setItem('zen_permanent_logs', JSON.stringify(list));
+            lsUpdated = true;
+          }
+        }
+      }
+    } catch (e) {}
+
+    return { updated: Boolean(updatedLog || lsUpdated), log: updatedLog };
   },
 
   // 3. 전체 학습 로그 불러오기 (최신순 정렬)

@@ -70,7 +70,7 @@ const Dashboard = {
       <!-- A. 최상단 스트릭 및 핵심 요약 벤토 배너 -->
       <div class="dash-summary-banner">
         <div class="streak-badge">
-          <span style="font-size: 2rem;">🔥</span>
+          <span class="dash-streak-badge" aria-hidden="true" style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;background:var(--accent-bg);color:var(--accent);"><svg class="zen-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
           <div>
             <div style="font-size: 1.25rem; font-weight: 800; color: #f59e0b; display: flex; align-items: center; gap: 8px;">
               <span>${summary.currentStreak || 1}일 연속 학습 중</span>
@@ -111,7 +111,7 @@ const Dashboard = {
           <div class="dash-panel">
             <div class="panel-header">
               <div>
-                <span class="title">🎯 오늘의 골든타임 복습 Top 5</span>
+                <span class="title">오늘의 골든타임 복습 Top 5</span>
                 <span class="subtitle">작성 완료(38개) 대상 망각 곡선 우선순위</span>
               </div>
               <span style="font-size: 0.75rem; color: var(--accent); font-weight: 600;">Clinical-SM2</span>
@@ -123,13 +123,13 @@ const Dashboard = {
       goldenQueue.forEach((doc, idx) => {
         let badgeHtml = '';
         if (doc.urgencyBadge === 'CRITICAL') {
-          badgeHtml = `<span class="badge-urgent-critical">🚨 긴급 (${doc.diffDays}일 전)</span>`;
+          badgeHtml = `<span class="badge-urgent-critical">긴급 (${doc.diffDays}일 전)</span>`;
         } else if (doc.urgencyBadge === 'DUE') {
-          badgeHtml = `<span class="badge-urgent-due">⚠️ 도래 (${doc.diffDays}일 전)</span>`;
+          badgeHtml = `<span class="badge-urgent-due">도래 (${doc.diffDays}일 전)</span>`;
         } else if (doc.urgencyBadge === 'NEW') {
-          badgeHtml = `<span class="badge-urgent-new">🆕 신규 미학습</span>`;
+          badgeHtml = `<span class="badge-urgent-new">신규 미학습</span>`;
         } else {
-          badgeHtml = `<span class="badge-urgent-stable">🟢 주기 ${doc.intervalDays || 1}일</span>`;
+          badgeHtml = `<span class="badge-urgent-stable">주기 ${doc.intervalDays || 1}일</span>`;
         }
 
         html += `
@@ -157,7 +157,7 @@ const Dashboard = {
     } else {
       html += `
         <div style="text-align: center; padding: 32px 16px; color: var(--text-muted); background: var(--bg-secondary); border-radius: 10px;">
-          <div style="font-size: 1.8rem; margin-bottom: 6px;">🎉</div>
+          <div style="font-size: 0.9rem; font-weight: 700; color: var(--success); margin-bottom: 4px;">완료</div>
           <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">오늘의 골든타임 복습을 모두 달성했습니다!</div>
           <div style="font-size: 0.8rem;">아래 임상 카테고리에서 미착수(Level 0) 노트를 골라 새로운 지식을 정복해보세요.</div>
         </div>
@@ -172,7 +172,7 @@ const Dashboard = {
           <div class="dash-panel" style="margin-top: 20px;">
             <div class="panel-header">
               <div>
-                <span class="title">📊 임상 도메인별 마스터리</span>
+                <span class="title">임상 도메인별 마스터리</span>
                 <span class="subtitle">140개 노트 4단계 회독 숙련도 분포</span>
               </div>
             </div>
@@ -192,7 +192,7 @@ const Dashboard = {
               <span class="cat-name">
                 <strong>${this.escapeHtml(cat)}</strong>
                 <span style="color: var(--text-muted); font-size: 0.78rem; margin-left: 4px;">(${c.total}개)</span>
-                ${isWeak ? '<span class="weak-badge">⚠️ 취약 영역: 보완 권장</span>' : ''}
+                ${isWeak ? '<span class="weak-badge">취약 영역 · 보완 권장</span>' : ''}
               </span>
               <span class="cat-pct">${masterPct}% 착수</span>
             </div>
@@ -228,7 +228,7 @@ const Dashboard = {
           <div class="dash-panel">
             <div class="panel-header">
               <div>
-                <span class="title">📅 최근 90일 복습 잔디</span>
+                <span class="title">최근 90일 복습 히트맵</span>
                 <span class="subtitle">누적 ${summary.totalReviews}회 학습 기록</span>
               </div>
             </div>
@@ -253,7 +253,7 @@ const Dashboard = {
           <!-- 4. 최근 복습 타임라인 로그 -->
           <div class="dash-panel" style="margin-top: 20px;">
             <div class="panel-header">
-              <span class="title">📜 최근 복습 로그</span>
+              <span class="title">최근 복습 로그</span>
             </div>
             <div class="recent-logs-box">
     `;
@@ -262,9 +262,9 @@ const Dashboard = {
       recentLogs.slice(0, 8).forEach(l => {
         const t = new Date(l.readAt || l.timestamp).toLocaleDateString();
         const mins = Math.max(1, Math.round((Number(l.durationSeconds) || 60) / 60));
-        let feedbackLabel = '🔵 적정';
-        if (l.feedback === 'easy') feedbackLabel = '🟢 수월함';
-        else if (l.feedback === 'hard') feedbackLabel = '🔴 헷갈림';
+        let feedbackLabel = '<span class="fb-dot fb-good"></span>적정';
+        if (l.feedback === 'easy') feedbackLabel = '<span class="fb-dot fb-easy"></span>수월함';
+        else if (l.feedback === 'hard') feedbackLabel = '<span class="fb-dot fb-hard"></span>헷갈림';
 
         html += `
           <div class="recent-log-row">
@@ -285,11 +285,11 @@ const Dashboard = {
           </div>
 
           <!-- 5. 데이터 백업 및 오프라인 관리 바로가기 -->
-          <div class="dash-panel" style="margin-top: 20px; background: rgba(30, 41, 59, 0.4);">
+          <div class="dash-panel" style="margin-top: 14px; background: var(--bg-secondary);">
             <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
               <div>
                 <div style="font-weight: 700; font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
-                  <span>🛡️ 태블릿 SSD 로컬 보존</span>
+                  <span>태블릿 SSD 로컬 보존</span>
                   <span style="font-size: 0.72rem; background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 6px; border-radius: 4px; font-weight: 600;">IndexedDB Persist</span>
                 </div>
                 <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 4px;">
@@ -298,7 +298,7 @@ const Dashboard = {
               </div>
               <div>
                 <button class="btn btn-sm btn-primary" onclick="App.showView('settings')">
-                  ⚙️ 데이터 및 설정 열기 →
+                  데이터 및 설정 열기 →
                 </button>
               </div>
             </div>
@@ -317,7 +317,7 @@ const Dashboard = {
     try {
       const count = await ZenStorage.importBackupJSON(file);
       if (typeof App !== 'undefined' && App.showToast) {
-        App.showToast(`✨ ${count}건의 학습 기록이 성공적으로 복원되었습니다!`);
+        App.showToast(`${count}건의 학습 기록이 복원되었습니다.`);
       }
       this.load();
       if (typeof App !== 'undefined' && App.loadDocuments) {
