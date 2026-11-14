@@ -109,7 +109,7 @@ Reader.executeCheckin('good').then(() => {
   let reFiltered = false;
   App.applyFilterAndSort = () => { reFiltered = true; };
 
-  App.refreshLocalStatsOnly().then(() => {
+  return App.refreshLocalStatsOnly().then(async () => {
     const doc2 = App.documents.find(d => d.id === 'doc-2');
     assert.strictEqual(doc2.reviewCount, 3, 'IndexedDB 통계가 doc-2에 반영되어야 합니다.');
     assert.strictEqual(reFiltered, true, '통계 변경 시 화면이 재필터링되어야 합니다.');
@@ -253,6 +253,810 @@ Reader.executeCheckin('good').then(() => {
     assert.strictEqual(Reader.headingsList[2].text, '2-1. 수용체 결합');
     console.log('✅ [Test 8 PASS] Reader.goBack 히스토리 라우팅 및 TOC 헤딩 수집 검증 완료');
 
-    console.log('\n🎉 ALL 8 TESTS PASSED! 모든 기능 무결성 검증 완료.');
+    await runV18Tests();
+    console.log('\n🎉 ALL 14 TESTS PASSED! v18 오프라인/동기화/보존 전체 무결성 검증 완료.');
   });
+}).catch(err => {
+  console.error('❌ 테스트 실패:', err);
+  process.exit(1);
 });
+
+async function runV18Tests() {
+  const realStorageCodePath = path.join(__dirname, '../public/js/storage-idb.js');
+  const realOfflineCodePath = path.join(__dirname, '../public/js/offline.js');
+  const realAppCodePath = path.join(__dirname, '../public/js/app.js');
+  const realReaderCodePath = path.join(__dirname, '../public/js/reader.js');
+  const realSettingsCodePath = path.join(__dirname, '../public/js/settings.js');
+
+  function setNavigatorOnline(onLine) {
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { onLine },
+      configurable: true,
+      writable: true
+    });
+  }
+
+  function createElementsRegistry() {
+    const els = {};
+    const getEl = (id) => {
+      if (!els[id]) {
+        const classes = new Set();
+        els[id] = {
+          id,
+          style: {},
+          dataset: {},
+          innerHTML: '',
+          innerText: '',
+          disabled: false,
+          value: '',
+          classList: {
+            add: (...c) => c.forEach(x => classes.add(x)),
+            remove: (...c) => c.forEach(x => classes.delete(x)),
+            contains: (c) => classes.has(c)
+          },
+          querySelectorAll: () => [],
+          querySelector: () => null,
+          addEventListener: () => {},
+          remove: () => {}
+        };
+      }
+      return els[id];
+    };
+    return { els, getEl };
+  }
+
+  function createMockIndexedDB(initialStudyLogs = []) {
+    const storesData = {
+      studyLogs: new Map()
+    };
+    let autoId = 1;
+    for (const log of initialStudyLogs) {
+      const id = log.id || autoId++;
+      if (id >= autoId) autoId = id + 1;
+      storesData.studyLogs.set(id, { ...log, id });
+    }
+    const storeConfigs = {
+      studyLogs: { keyPath: 'id', autoIncrement: true, indexes: new Set(['docId', 'timestamp', 'readAt', 'reviewCount', 'synced']) }
+    };
+    let currentVersion = 1;
+
+    const makeReq = () => ({ result: undefined, error: null, onsuccess: null, onerror: null });
+
+    const makeDBHandle = () => ({
+      objectStoreNames: {
+        contains: (name) => Object.prototype.hasOwnProperty.call(storesData, name)
+      },
+      createObjectStore: (name, opts = {}) => {
+        if (!storesData[name]) storesData[name] = new Map();
+        storeConfigs[name] = { keyPath: opts.keyPath || 'id', autoIncrement: Boolean(opts.autoIncrement), indexes: new Set() };
+        return {
+          indexNames: { contains: (idx) => storeConfigs[name].indexes.has(idx) },
+          createIndex: (idx) => { storeConfigs[name].indexes.add(idx); }
+        };
+      },
+      transaction: (names) => {
+        const storeList = Array.isArray(names) ? names : [names];
+        return {
+          objectStore: (storeName) => {
+            if (!storeList.includes(storeName) || !storesData[storeName]) {
+              throw new Error(`Store ${storeName} not in transaction`);
+            }
+            const map = storesData[storeName];
+            const cfg = storeConfigs[storeName];
+            return {
+              indexNames: { contains: (idx) => cfg.indexes.has(idx) },
+              createIndex: (idx) => { cfg.indexes.add(idx); },
+              put: (val) => {
+                const req = makeReq();
+                const copy = { ...val };
+                let key = copy[cfg.keyPath];
+                if (key === undefined && cfg.autoIncrement) {
+                  key = autoId++;
+                  copy[cfg.keyPath] = key;
+                }
+                map.set(key, copy);
+                queueMicrotask(() => {
+                  req.result = key;
+                  if (req.onsuccess) req.onsuccess({ target: req });
+                });
+                return req;
+              },
+              add: (val) => {
+                const req = makeReq();
+                const copy = { ...val };
+                let key = copy[cfg.keyPath];
+                if (key === undefined && cfg.autoIncrement) {
+                  key = autoId++;
+                  copy[cfg.keyPath] = key;
+                }
+                map.set(key, copy);
+                queueMicrotask(() => {
+                  req.result = key;
+                  if (req.onsuccess) req.onsuccess({ target: req });
+                });
+                return req;
+              },
+              get: (key) => {
+                const req = makeReq();
+                queueMicrotask(() => {
+                  req.result = map.has(key) ? { ...map.get(key) } : undefined;
+                  if (req.onsuccess) req.onsuccess({ target: req });
+                });
+                return req;
+              },
+              getAll: () => {
+                const req = makeReq();
+                queueMicrotask(() => {
+                  req.result = Array.from(map.values()).map(v => ({ ...v }));
+                  if (req.onsuccess) req.onsuccess({ target: req });
+                });
+                return req;
+              },
+              delete: (key) => {
+                const req = makeReq();
+                map.delete(key);
+                queueMicrotask(() => {
+                  req.result = undefined;
+                  if (req.onsuccess) req.onsuccess({ target: req });
+                });
+                return req;
+              },
+              clear: () => {
+                const req = makeReq();
+                map.clear();
+                queueMicrotask(() => {
+                  req.result = undefined;
+                  if (req.onsuccess) req.onsuccess({ target: req });
+                });
+                return req;
+              }
+            };
+          }
+        };
+      },
+      close: () => {},
+      onversionchange: null,
+      onclose: null
+    });
+
+    return {
+      storesData,
+      storeConfigs,
+      indexedDB: {
+        open: (name, version) => {
+          const req = { result: null, error: null, transaction: null, onupgradeneeded: null, onsuccess: null, onerror: null };
+          queueMicrotask(() => {
+            const db = makeDBHandle();
+            req.result = db;
+            req.transaction = db.transaction(Object.keys(storesData));
+            if (version > currentVersion) {
+              currentVersion = version;
+              if (req.onupgradeneeded) {
+                req.onupgradeneeded({ target: req });
+              }
+            }
+            if (req.onsuccess) {
+              req.onsuccess({ target: req });
+            }
+          });
+          return req;
+        }
+      }
+    };
+  }
+
+  function createMockCacheStorage(initialCaches = {}) {
+    const cacheMap = new Map();
+    for (const [name, entries] of Object.entries(initialCaches)) {
+      const store = new Map(Object.entries(entries));
+      cacheMap.set(name, store);
+    }
+    const openCacheObj = (name) => {
+      if (!cacheMap.has(name)) cacheMap.set(name, new Map());
+      const store = cacheMap.get(name);
+      return {
+        match: async (req, opts = {}) => {
+          const targetUrl = typeof req === 'string' ? req : (req && req.url);
+          if (!targetUrl) return undefined;
+          if (store.has(targetUrl)) return store.get(targetUrl);
+          if (opts.ignoreSearch) {
+            const base = targetUrl.split('?')[0];
+            for (const [k, v] of store.entries()) {
+              if (k.split('?')[0] === base) return v;
+            }
+          }
+          return undefined;
+        },
+        keys: async () => Array.from(store.keys()).map(u => ({ url: u })),
+        put: async (req, val) => {
+          const targetUrl = typeof req === 'string' ? req : (req && req.url);
+          if (targetUrl) store.set(targetUrl, val);
+        }
+      };
+    };
+    return {
+      cacheMap,
+      caches: {
+        open: async (name) => openCacheObj(name),
+        keys: async () => Array.from(cacheMap.keys()),
+        delete: async (name) => cacheMap.delete(name)
+      }
+    };
+  }
+
+  function resetDomMocks() {
+    const reg = createElementsRegistry();
+    global.document = {
+      getElementById: reg.getEl,
+      querySelectorAll: () => [],
+      querySelector: () => null,
+      createElement: (tag) => reg.getEl(`__created_${tag}_${Math.random()}`),
+      addEventListener: () => {},
+      body: { className: '', appendChild: () => {}, classList: { add() {}, remove() {}, contains: () => false } }
+    };
+    global.window = {
+      location: { pathname: '/' },
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      scrollTo: () => {},
+      scrollY: 0,
+      matchMedia: () => ({ matches: false })
+    };
+    global.localStorage = {
+      _store: {},
+      getItem(k) { return Object.prototype.hasOwnProperty.call(this._store, k) ? this._store[k] : null; },
+      setItem(k, v) { this._store[k] = String(v); },
+      removeItem(k) { delete this._store[k]; }
+    };
+    global.history = {
+      length: 1,
+      state: null,
+      pushState: () => {},
+      replaceState: () => {},
+      back: () => {}
+    };
+    return reg;
+  }
+
+  function loadFreshZenStorage() {
+    delete require.cache[require.resolve(realStorageCodePath)];
+    const storage = require(realStorageCodePath);
+    storage.db = null;
+    storage._openPromise = null;
+    storage._memDocs.clear();
+    storage._memList = null;
+    global.ZenStorage = storage;
+    return storage;
+  }
+
+  function loadFreshAppAndReader() {
+    const appSrc = fs.readFileSync(realAppCodePath, 'utf-8');
+    const readerSrc = fs.readFileSync(realReaderCodePath, 'utf-8');
+    eval(appSrc.replace('const App =', 'global.App ='));
+    eval(readerSrc.replace('const Reader =', 'global.Reader ='));
+    global.App.documents = [];
+    global.App.filteredDocuments = [];
+    global.App.offlineDocIds = new Set();
+    global.App.currentView = 'list';
+  }
+
+  // =========================================================================
+  // Test 9: ZenStorage v2 document CRUD, summary, prune, clear (studyLogs 보존)
+  // =========================================================================
+  console.log('🧪 [Test 9] ZenStorage v2 문서 CRUD, 요약/고아정리, studyLogs 보존 초기화 검증');
+  {
+    resetDomMocks();
+    delete global.caches;
+    setNavigatorOnline(true);
+
+    // 9-A. Pure in-memory fallback (without window.indexedDB)
+    const storageMem = loadFreshZenStorage();
+    assert.strictEqual(storageMem.DB_VERSION, 2, 'ZenStorage.DB_VERSION은 2여야 합니다.');
+
+    let threwOnInvalid = false;
+    try {
+      await storageMem.saveDocument({ title: 'no id' });
+    } catch (_) {
+      threwOnInvalid = true;
+    }
+    assert.strictEqual(threwOnInvalid, true, 'id 없는 문서 저장 시 예외를 발생시켜야 합니다.');
+
+    await storageMem.saveDocument({
+      id: 'doc-up',
+      title: '최신 문서',
+      updatedAt: '2026-11-12T10:00:00.000Z',
+      blocks: [{ type: 'paragraph', text: '최신 본문 내용' }]
+    });
+    await storageMem.saveDocument({
+      id: 'doc-out',
+      title: '구버전 문서',
+      updatedAt: '2026-11-10T10:00:00.000Z',
+      blocks: [{ type: 'paragraph', text: '이전 본문' }]
+    });
+    await storageMem.saveDocument({
+      id: 'doc-orphan',
+      title: '삭제된 고아 문서',
+      updatedAt: '2026-11-09T10:00:00.000Z',
+      blocks: [{ type: 'paragraph', text: '고아 본문' }]
+    });
+    await storageMem.saveDocument({
+      id: 'doc-stub',
+      title: '본문없는 메타'
+    });
+
+    const gotDoc = await storageMem.getDocument('doc-up');
+    assert.strictEqual(gotDoc.title, '최신 문서');
+    assert.ok(gotDoc.cachedAt, 'cachedAt 타임스탬프가 자동 부여되어야 합니다.');
+    assert.strictEqual(await storageMem.getDocument('non-existent'), null);
+
+    await storageMem.saveDocumentList([{ id: 'doc-up', title: '최신 문서' }]);
+    const gotList = await storageMem.getDocumentList();
+    assert.strictEqual(gotList.length, 1);
+    assert.strictEqual(gotList[0].id, 'doc-up');
+
+    const cachedIds = await storageMem.getCachedDocIds();
+    assert.strictEqual(cachedIds.has('doc-up'), true);
+    assert.strictEqual(cachedIds.has('doc-stub'), false, 'blocks/content가 없는 문서는 getCachedDocIds에 포함되지 않아야 합니다.');
+
+    // remove doc-stub before summary check for clean 3-doc count
+    await storageMem.pruneOrphanDocuments(['doc-up', 'doc-out', 'doc-orphan']);
+    assert.strictEqual(await storageMem.getDocument('doc-stub'), null, 'doc-stub가 정리되어야 합니다.');
+
+    const summary = await storageMem.getOfflineCacheSummary([
+      { id: 'doc-up', updatedAt: '2026-11-12T10:00:00.000Z' },
+      { id: 'doc-out', updatedAt: '2026-11-14T10:00:00.000Z' },
+      { id: 'doc-miss', updatedAt: '2026-11-13T10:00:00.000Z' }
+    ]);
+    assert.strictEqual(summary.totalRemote, 3);
+    assert.strictEqual(summary.cachedCount, 3);
+    assert.strictEqual(summary.upToDateCount, 1);
+    assert.strictEqual(summary.outdatedCount, 1);
+    assert.strictEqual(summary.missingCount, 1);
+    assert.strictEqual(summary.orphanCount, 1);
+    assert.ok(summary.approxSizeKB >= 1);
+    assert.ok(summary.lastCachedAt);
+
+    assert.strictEqual(await storageMem.pruneOrphanDocuments([]), 0, '빈 목록 전달 시 안전하게 0을 반환해야 합니다.');
+    const prunedCount = await storageMem.pruneOrphanDocuments(new Set(['doc-up', 'doc-out', 'doc-miss']));
+    assert.strictEqual(prunedCount, 1, '고아 문서 1건이 삭제되어야 합니다.');
+    assert.strictEqual(await storageMem.getDocument('doc-orphan'), null);
+
+    // 9-B. Mock IndexedDB v1 -> v2 upgrade + OfflineManager delegation + clearDocumentCache preserving studyLogs
+    const mockIdb = createMockIndexedDB([
+      { id: 1, docId: 'doc-up', docTitle: '최신 문서', reviewCount: 2, readAt: '2026-11-10T00:00:00.000Z', timestamp: '2026-11-10T00:00:00.000Z' }
+    ]);
+    global.window.indexedDB = mockIdb.indexedDB;
+    const mockCaches = createMockCacheStorage({
+      'zen-data-v1': { 'https://app.local/api/documents/doc-up': 'cached-api' },
+      'zen-images-v1': { 'https://cdn.example.com/img1.png?sig=abc': 'img-bin' },
+      'zen-reader-v18': { 'https://app.local/index.html': 'html-shell' }
+    });
+    global.caches = mockCaches.caches;
+
+    const storageIdb = loadFreshZenStorage();
+    const openedDb = await storageIdb.openDB();
+    assert.ok(openedDb.objectStoreNames.contains('studyLogs'), 'v2 업그레이드 후 studyLogs 스토어가 보존되어야 합니다.');
+    assert.ok(openedDb.objectStoreNames.contains('documents'), 'v2 업그레이드 시 documents 스토어가 생성되어야 합니다.');
+    assert.ok(openedDb.objectStoreNames.contains('meta'), 'v2 업그레이드 시 meta 스토어가 생성되어야 합니다.');
+
+    delete require.cache[require.resolve(realOfflineCodePath)];
+    const offlineMgr = require(realOfflineCodePath);
+    offlineMgr.dbInstance = null;
+    global.OfflineManager = offlineMgr;
+    assert.strictEqual(offlineMgr.DB_VERSION, 2, 'OfflineManager.DB_VERSION은 2여야 합니다.');
+    const delegatedDb = await offlineMgr.openDB();
+    assert.strictEqual(delegatedDb, openedDb, 'OfflineManager.openDB()는 ZenStorage.openDB()와 동일 DB 핸들을 공유해야 합니다.');
+
+    await storageIdb.saveDocument({
+      id: 'doc-up',
+      title: '최신 문서',
+      updatedAt: '2026-11-12T10:00:00.000Z',
+      blocks: [
+        { type: 'image', imageUrl: 'https://cdn.example.com/img1.png?sig=new' },
+        { type: 'toggle', children: [{ type: 'image', imageUrl: 'https://cdn.example.com/img2.png' }] }
+      ]
+    });
+    await storageIdb.saveDocumentList([{ id: 'doc-up', title: '최신 문서' }]);
+
+    // Verify prefetchDocumentImages skips already-cached pathname (img1.png) and fetches missing (img2.png)
+    const prefetchedUrls = [];
+    global.fetch = async (url, opts) => {
+      prefetchedUrls.push({ url, opts });
+      return { ok: true, status: 200 };
+    };
+    const prefetchRes = await storageIdb.prefetchDocumentImages(await storageIdb.getDocument('doc-up'), 3);
+    assert.strictEqual(prefetchRes.total, 2);
+    assert.strictEqual(prefetchRes.skipped, 1, 'pathname이 일치하는 img1은 중복 fetch하지 않아야 합니다.');
+    assert.strictEqual(prefetchRes.fetched, 1, '미저장 img2만 fetch되어야 합니다.');
+    assert.strictEqual(prefetchedUrls[0].url, 'https://cdn.example.com/img2.png');
+    assert.strictEqual(prefetchedUrls[0].opts.mode, 'no-cors');
+
+    setNavigatorOnline(false);
+    const offlinePrefetchRes = await storageIdb.prefetchDocumentImages(await storageIdb.getDocument('doc-up'), 3);
+    assert.deepStrictEqual(offlinePrefetchRes, { total: 0, skipped: 0, fetched: 0 }, '오프라인 시 prefetchDocumentImages는 안전하게 no-op이어야 합니다.');
+    setNavigatorOnline(true);
+
+    localStorage.setItem('zen_doc_sync_map', '{"doc-up":{"cachedUpdatedAt":"2026-11-12"}}');
+    localStorage.setItem('zen_cached_documents', '[{"id":"doc-up"}]');
+    localStorage.setItem('zen_permanent_logs', '[{"docId":"doc-up"}]');
+
+    const clearRes = await storageIdb.clearDocumentCache();
+    assert.strictEqual(clearRes.clearedDocsCount, 1);
+    assert.strictEqual(await storageIdb.getDocument('doc-up'), null, 'documents 스토어가 비워져야 합니다.');
+    assert.strictEqual(await storageIdb.getDocumentList(), null, 'documentList 메타가 삭제되어야 합니다.');
+    assert.strictEqual(localStorage.getItem('zen_doc_sync_map'), null);
+    assert.strictEqual(localStorage.getItem('zen_cached_documents'), null);
+    assert.strictEqual(mockCaches.cacheMap.has('zen-data-v1'), false, 'zen-data-v1 캐시가 삭제되어야 합니다.');
+    assert.strictEqual(mockCaches.cacheMap.has('zen-images-v1'), false, 'zen-images-v1 캐시가 삭제되어야 합니다.');
+    assert.strictEqual(mockCaches.cacheMap.has('zen-reader-v18'), true, '앱 셸 캐시(zen-reader-v18)는 보존되어야 합니다.');
+
+    const preservedLogs = await storageIdb.getAllLogs();
+    assert.strictEqual(preservedLogs.length, 1, 'clearDocumentCache() 후에도 studyLogs 학습 기록이 100% 보존되어야 합니다.');
+    assert.strictEqual(preservedLogs[0].docId, 'doc-up');
+    assert.strictEqual(localStorage.getItem('zen_permanent_logs'), '[{"docId":"doc-up"}]', 'zen_permanent_logs 미러도 보존되어야 합니다.');
+
+    delete global.window.indexedDB;
+    delete global.caches;
+    console.log('✅ [Test 9 PASS] ZenStorage v2 문서 CRUD/요약/고아정리/이미지프리패치 및 studyLogs 보존 초기화 확인');
+  }
+
+  // =========================================================================
+  // Test 10: App.loadDocuments() 오프라인 비파괴 가드 + 수정 감지
+  // =========================================================================
+  console.log('🧪 [Test 10] App.loadDocuments() 오프라인 비파괴 가드 및 수정 감지 검증');
+  {
+    const reg = resetDomMocks();
+    const storage = loadFreshZenStorage();
+    loadFreshAppAndReader();
+
+    const listEl = reg.getEl('doc-card-list');
+    await storage.saveDocument({
+      id: 'doc-cached',
+      title: '저장된 약물',
+      updatedAt: '2026-11-10T00:00:00.000Z',
+      blocks: [{ type: 'paragraph', text: '본문' }]
+    });
+
+    const cachedList = [
+      { id: 'doc-cached', title: '저장된 약물', status: '완료', updatedAt: '2026-11-10T00:00:00.000Z', createdAt: '2026-11-01T00:00:00.000Z', tags: ['약물'] },
+      { id: 'doc-uncached', title: '미저장 약물', status: '진행 중', updatedAt: '2026-11-11T00:00:00.000Z', createdAt: '2026-11-02T00:00:00.000Z', tags: ['임상'] }
+    ];
+    localStorage.setItem('zen_cached_documents', JSON.stringify(cachedList));
+
+    // Scenario A: fetch throws network error while offline
+    setNavigatorOnline(false);
+    global.fetch = async () => { throw new Error('Failed to fetch'); };
+    await App.loadDocuments(false);
+    assert.strictEqual(listEl.innerHTML.includes('문서 목록 로딩 실패'), false, '네트워크 실패 시 기존 목록이 에러 화면으로 덮어씌워지면 안 됩니다.');
+    assert.strictEqual(listEl.innerHTML.includes('저장된 약물'), true);
+    assert.strictEqual(listEl.innerHTML.includes('미저장 약물'), true);
+    assert.strictEqual(listEl.innerHTML.includes('card-offline-unavailable'), true, '오프라인 미저장 문서에 card-offline-unavailable 클래스가 적용되어야 합니다.');
+    assert.strictEqual(listEl.innerHTML.includes('badge-doc-uncached'), true, '오프라인 미저장 문서에 ☁️ 미저장 뱃지가 렌더링되어야 합니다.');
+
+    // Scenario B: fetch returns SW offline JSON { success: false, offline: true }
+    App.documents = [];
+    listEl.innerHTML = '';
+    global.fetch = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: false, offline: true, message: '오프라인 상태입니다.' })
+    });
+    await App.loadDocuments(false);
+    assert.strictEqual(listEl.innerHTML.includes('문서 목록 로딩 실패'), false, 'SW 오프라인 JSON 응답 시에도 캐시 목록이 보존되어야 합니다.');
+    assert.strictEqual(App.documents.length, 2);
+
+    // Scenario C: localStorage empty -> fallback to ZenStorage.getDocumentList()
+    localStorage.removeItem('zen_cached_documents');
+    await storage.saveDocumentList(cachedList);
+    App.documents = [];
+    listEl.innerHTML = '';
+    await App.loadDocuments(false);
+    assert.strictEqual(App.documents.length, 2, 'localStorage 비어있을 때 ZenStorage.getDocumentList()에서 복원되어야 합니다.');
+    assert.strictEqual(listEl.innerHTML.includes('문서 목록 로딩 실패'), false);
+
+    // Scenario D: Online fetch with update detection & orphan pruning
+    setNavigatorOnline(true);
+    await storage.saveDocument({
+      id: 'doc-stale-orphan',
+      title: '삭제 예정 고아',
+      updatedAt: '2026-11-01T00:00:00.000Z',
+      blocks: [{ type: 'paragraph', text: 'x' }]
+    });
+    global.fetch = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        documents: [
+          { id: 'doc-cached', title: '저장된 약물', status: '완료', updatedAt: '2026-11-14T00:00:00.000Z', createdAt: '2026-11-01T00:00:00.000Z', tags: ['약물'] },
+          { id: 'doc-uncached', title: '미저장 약물', status: '진행 중', updatedAt: '2026-11-11T00:00:00.000Z', createdAt: '2026-11-02T00:00:00.000Z', tags: ['임상'] }
+        ]
+      })
+    });
+    await App.loadDocuments(false);
+    await new Promise(r => setTimeout(r, 20)); // allow background pruneOrphanDocuments promise to settle
+    const updatedCachedDoc = App.documents.find(d => d.id === 'doc-cached');
+    const uncachedDoc = App.documents.find(d => d.id === 'doc-uncached');
+    assert.strictEqual(updatedCachedDoc.hasUpdate, true, '원격 updatedAt이 캐시보다 최신이면 hasUpdate=true여야 합니다.');
+    assert.strictEqual(updatedCachedDoc.isCachedLocally, true);
+    assert.strictEqual(uncachedDoc.hasUpdate, false, '로컬 미저장 문서는 최초 방문 스팸 방지를 위해 hasUpdate=false여야 합니다.');
+    assert.strictEqual(await storage.getDocument('doc-stale-orphan'), null, '목록 동기화 시 고아 문서가 자동 정리되어야 합니다.');
+
+    console.log('✅ [Test 10 PASS] App.loadDocuments() 오프라인 비파괴 가드, IDB 목록 복원, 수정 감지 확인');
+  }
+
+  // =========================================================================
+  // Test 11: Reader.open() 온라인 저장, 오프라인/outdated 배너, SWR 백그라운드 갱신
+  // =========================================================================
+  console.log('🧪 [Test 11] Reader.open() ZenStorage 영구 저장, 오프라인 폴백 및 배너 렌더링 검증');
+  {
+    const reg = resetDomMocks();
+    const storage = loadFreshZenStorage();
+    loadFreshAppAndReader();
+
+    const readerEl = reg.getEl('reader-content');
+
+    // 11-A. Online open saves doc to ZenStorage
+    setNavigatorOnline(true);
+    global.fetch = async (url) => {
+      assert.strictEqual(url, '/api/documents/doc-r1');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          document: {
+            id: 'doc-r1',
+            title: '항생제 가이드',
+            updatedAt: '2026-11-12T10:00:00.000Z',
+            tags: ['감염'],
+            blocks: [{ type: 'paragraph', text: '초기 저장 본문' }]
+          }
+        })
+      };
+    };
+
+    await Reader.open('doc-r1', false);
+    const savedInIdb = await storage.getDocument('doc-r1');
+    assert.ok(savedInIdb, '온라인 열람 후 ZenStorage에 문서가 저장되어야 합니다.');
+    assert.strictEqual(savedInIdb.title, '항생제 가이드');
+    assert.strictEqual(App.offlineDocIds.has('doc-r1'), true);
+    assert.strictEqual(readerEl.innerHTML.includes('초기 저장 본문'), true);
+    assert.strictEqual(readerEl.innerHTML.includes('reader-cache-banner'), false, '정상 최신 온라인 본문에는 오프라인/구버전 배너가 노출되지 않아야 합니다.');
+    Reader.cleanup();
+
+    // 11-B. Offline open renders cached doc immediately with banner-offline
+    setNavigatorOnline(false);
+    global.fetch = async () => { throw new Error('Should not fetch when offline with cache'); };
+    await Reader.open('doc-r1', false);
+    assert.strictEqual(readerEl.innerHTML.includes('초기 저장 본문'), true);
+    assert.strictEqual(readerEl.innerHTML.includes('reader-cache-banner banner-offline'), true, '오프라인 열람 시 banner-offline 배너가 렌더링되어야 합니다.');
+    assert.strictEqual(readerEl.innerHTML.includes('📦 오프라인 저장본 열람 중'), true);
+    Reader.cleanup();
+
+    // 11-C. Outdated doc when fetch fails (or returns SW offline JSON) falls back with banner-outdated
+    setNavigatorOnline(true);
+    App.documents = [{ id: 'doc-r1', title: '항생제 가이드', updatedAt: '2026-11-15T00:00:00.000Z', hasUpdate: true }];
+    global.fetch = async (url) => {
+      assert.strictEqual(url, '/api/documents/doc-r1?refresh=true', 'hasUpdate=true 문서는 ?refresh=true로 요청해야 합니다.');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ success: false, offline: true, message: '오프라인 상태입니다.' })
+      };
+    };
+    await Reader.open('doc-r1', false);
+    assert.strictEqual(readerEl.innerHTML.includes('초기 저장 본문'), true);
+    assert.strictEqual(readerEl.innerHTML.includes('reader-cache-banner banner-outdated'), true, '수정본 미동기화 폴백 시 banner-outdated 배너가 렌더링되어야 합니다.');
+    assert.strictEqual(readerEl.innerHTML.includes('Reader.refreshCurrentDoc()'), true);
+    assert.strictEqual(App.documents[0].hasUpdate, true, '폴백 시에는 hasUpdate=true가 유지되어야 합니다.');
+    Reader.cleanup();
+
+    // 11-D. Online 0ms SWR + background revalidation updates ZenStorage & DOM
+    App.documents[0].hasUpdate = false;
+    global.fetch = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        document: {
+          id: 'doc-r1',
+          title: '항생제 가이드',
+          updatedAt: '2026-11-15T01:00:00.000Z',
+          tags: ['감염'],
+          blocks: [{ type: 'paragraph', text: '백그라운드 최신 본문' }]
+        }
+      })
+    });
+    await Reader.open('doc-r1', false);
+    assert.strictEqual(readerEl.innerHTML.includes('초기 저장 본문'), true, 'SWR로 0ms에 캐시본이 먼저 렌더링되어야 합니다.');
+    await Reader._revalidationPromise;
+    assert.strictEqual(readerEl.innerHTML.includes('백그라운드 최신 본문'), true, '백그라운드 재검증 후 최신 본문으로 자동 갱신되어야 합니다.');
+    const revalidated = await storage.getDocument('doc-r1');
+    assert.strictEqual(revalidated.updatedAt, '2026-11-15T01:00:00.000Z');
+    Reader.cleanup();
+
+    console.log('✅ [Test 11 PASS] Reader.open() 온라인 영구저장, 오프라인/구버전 배너 및 SWR 백그라운드 갱신 확인');
+  }
+
+  // =========================================================================
+  // Test 12: App.downloadAllForOffline(false) 증분 동기화 vs forceAll=true
+  // =========================================================================
+  console.log('🧪 [Test 12] App.downloadAllForOffline() 증분 동기화(Delta Sync) vs 전체 재다운로드 검증');
+  {
+    resetDomMocks();
+    const storage = loadFreshZenStorage();
+    loadFreshAppAndReader();
+
+    setNavigatorOnline(true);
+    global.confirm = () => true;
+
+    await storage.saveDocument({
+      id: 'd-up',
+      title: '최신문서',
+      updatedAt: '2026-11-10T00:00:00.000Z',
+      blocks: [{ type: 'paragraph', text: 'ok' }]
+    });
+    await storage.saveDocument({
+      id: 'd-out',
+      title: '수정문서',
+      updatedAt: '2026-11-10T00:00:00.000Z',
+      blocks: [{ type: 'paragraph', text: 'old' }]
+    });
+
+    App.documents = [
+      { id: 'd-up', title: '최신문서', updatedAt: '2026-11-10T00:00:00.000Z', hasUpdate: false },
+      { id: 'd-out', title: '수정문서', updatedAt: '2026-11-14T00:00:00.000Z', hasUpdate: true },
+      { id: 'd-miss', title: '미저장문서', updatedAt: '2026-11-12T00:00:00.000Z', hasUpdate: false }
+    ];
+
+    let requestedUrls = [];
+    global.fetch = async (url) => {
+      requestedUrls.push(url);
+      const id = url.replace('/api/documents/', '').split('?')[0];
+      const remoteDoc = App.documents.find(d => d.id === id);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          document: {
+            id,
+            title: remoteDoc.title,
+            updatedAt: remoteDoc.updatedAt,
+            blocks: [{ type: 'paragraph', text: `synced-${id}` }]
+          }
+        })
+      };
+    };
+
+    await App.downloadAllForOffline(false);
+    assert.strictEqual(requestedUrls.length, 2, '증분 저장 시 이미 최신인 d-up은 건너뛰고 2건만 다운로드해야 합니다.');
+    assert.strictEqual(requestedUrls.some(u => u.includes('/d-up')), false);
+    assert.strictEqual(requestedUrls.some(u => u.includes('/d-out?refresh=true')), true);
+    assert.strictEqual(requestedUrls.some(u => u.includes('/d-miss')), true);
+    assert.ok(await storage.getDocument('d-miss'), 'd-miss가 ZenStorage에 저장되어야 합니다.');
+    assert.strictEqual((await storage.getDocument('d-out')).updatedAt, '2026-11-14T00:00:00.000Z');
+
+    // Second incremental run should skip all
+    requestedUrls = [];
+    await App.downloadAllForOffline(false);
+    assert.strictEqual(requestedUrls.length, 0, '모두 최신 상태일 때 증분 저장은 네트워크 요청 없이 종료되어야 합니다.');
+
+    // forceAll = true downloads all 3 with ?refresh=true
+    requestedUrls = [];
+    await App.downloadAllForOffline(true);
+    assert.strictEqual(requestedUrls.length, 3, 'forceAll=true 시 전체 3건 모두 재다운로드해야 합니다.');
+    assert.ok(requestedUrls.every(u => u.includes('?refresh=true')), 'forceAll=true 시 모든 요청에 ?refresh=true가 포함되어야 합니다.');
+
+    console.log('✅ [Test 12 PASS] App.downloadAllForOffline() 증분 동기화 및 forceAll 분기 확인');
+  }
+
+  // =========================================================================
+  // Test 13: sw.js / index.html / offline.js / app.css 정적 무결성 검증
+  // =========================================================================
+  console.log('🧪 [Test 13] sw.js, index.html, offline.js, app.css 정적 계약 및 버전 정렬 검증');
+  {
+    const swSrc = fs.readFileSync(path.join(__dirname, '../public/sw.js'), 'utf-8');
+    const htmlSrc = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf-8');
+    const offlineSrc = fs.readFileSync(realOfflineCodePath, 'utf-8');
+    const cssSrc = fs.readFileSync(path.join(__dirname, '../public/css/app.css'), 'utf-8');
+    const notionSrc = fs.readFileSync(path.join(__dirname, '../api/lib/notion.js'), 'utf-8');
+
+    assert.ok(swSrc.includes("const CACHE_NAME = 'zen-reader-v18'"), 'sw.js CACHE_NAME이 zen-reader-v18이어야 합니다.');
+    assert.ok(swSrc.includes("const DATA_CACHE_NAME = 'zen-data-v1'"), 'sw.js DATA_CACHE_NAME이 zen-data-v1이어야 합니다.');
+    assert.ok(
+      swSrc.includes('PRESERVED_CACHES = [CACHE_NAME, DATA_CACHE_NAME, IMAGE_CACHE_NAME]'),
+      'sw.js activate 단계에서 DATA_CACHE_NAME이 PRESERVED_CACHES에 보존되어야 합니다.'
+    );
+    assert.ok(swSrc.includes('event.waitUntil(cacheWritePromise)'), 'sw.js /api/* 캐시 쓰기가 event.waitUntil로 감싸져야 합니다.');
+    assert.ok(
+      swSrc.includes('if (isCodeAsset)') &&
+      swSrc.includes('caches.match(event.request, { ignoreSearch: true })') &&
+      swSrc.includes("status: 503"),
+      'sw.js Section C는 JS/CSS 오프라인 폴백 시 ignoreSearch를 사용하고 /index.html 대신 503을 반환해야 합니다.'
+    );
+    assert.ok(
+      swSrc.includes("if (event.request.mode === 'navigate')"),
+      'sw.js Section D는 navigate 요청일 때만 /index.html로 폴백해야 합니다.'
+    );
+
+    assert.strictEqual(htmlSrc.includes('v20261108_v17'), false, 'index.html에 구버전 v17 쿼리스트링이 남아있으면 안 됩니다.');
+    const v18Matches = htmlSrc.match(/\?v=20261115_v18/g) || [];
+    assert.strictEqual(v18Matches.length, 7, 'index.html의 app.css + 6개 script 태그 모두 ?v=20261115_v18이어야 합니다.');
+
+    assert.ok(/DB_VERSION:\s*2\b/.test(offlineSrc), 'offline.js의 DB_VERSION이 2여야 합니다.');
+    assert.ok(offlineSrc.includes('ZenStorage.openDB()'), 'offline.js가 ZenStorage.openDB()에 위임해야 합니다.');
+
+    [
+      '.doc-card.card-offline-unavailable',
+      '.badge-doc-uncached',
+      '.reader-cache-banner',
+      '.reader-cache-banner.banner-offline',
+      '.reader-cache-banner.banner-outdated',
+      '.cache-stats-grid',
+      '.cache-stat-pill',
+      '.cache-actions-row'
+    ].forEach(cls => {
+      assert.ok(cssSrc.includes(cls), `app.css에 ${cls} 스타일이 정의되어 있어야 합니다.`);
+    });
+
+    assert.ok(notionSrc.includes('createConcurrencyLimiter(3)'), 'api/lib/notion.js에 동시성 3 제한기가 적용되어 있어야 합니다.');
+
+    console.log('✅ [Test 13 PASS] sw.js, index.html, offline.js, app.css, notion.js 정적 무결성 확인');
+  }
+
+  // =========================================================================
+  // Test 14: Settings.load / render / pruneOrphans / clearDocCacheOnly 통합 검증
+  // =========================================================================
+  console.log('🧪 [Test 14] Settings 탭 캐시 요약/고아 정리/studyLogs 보존 초기화 통합 검증');
+  {
+    const reg = resetDomMocks();
+    const storage = loadFreshZenStorage();
+    loadFreshAppAndReader();
+    const settingsSrc = fs.readFileSync(realSettingsCodePath, 'utf-8');
+    eval(settingsSrc.replace('const Settings =', 'global.Settings ='));
+
+    const mockIdb = createMockIndexedDB([
+      { id: 1, docId: 'doc-1', docTitle: '약물1', reviewCount: 1, readAt: '2026-11-10T00:00:00.000Z', timestamp: '2026-11-10T00:00:00.000Z' }
+    ]);
+    global.window.indexedDB = mockIdb.indexedDB;
+    global.OfflineManager = { isPersisted: false, getQueue: () => [] };
+    setNavigatorOnline(true);
+    global.confirm = () => true;
+
+    await storage.openDB();
+    await storage.saveDocument({ id: 'doc-1', title: '약물1', updatedAt: '2026-11-10T00:00:00.000Z', blocks: [{ type: 'paragraph', text: 'A' }] });
+    await storage.saveDocument({ id: 'doc-orphan', title: '고아', updatedAt: '2026-11-08T00:00:00.000Z', blocks: [{ type: 'paragraph', text: 'B' }] });
+
+    App.documents = [
+      { id: 'doc-1', title: '약물1', updatedAt: '2026-11-10T00:00:00.000Z' },
+      { id: 'doc-2', title: '약물2', updatedAt: '2026-11-11T00:00:00.000Z' }
+    ];
+
+    const settingsEl = reg.getEl('settings-content');
+    await Settings.load();
+    assert.strictEqual(settingsEl.innerHTML.includes('일반 보존 (요청 대기)'), true, 'isPersisted=false일 때 일반 보존 (요청 대기)가 표시되어야 합니다.');
+    assert.strictEqual(settingsEl.innerHTML.includes('저장 완료: <strong>2 / 2건</strong> (미저장 1건, 업데이트 필요 0건)'), true, '캐시 요약 수치가 정확히 표시되어야 합니다.');
+    assert.strictEqual(settingsEl.innerHTML.includes('고아 문서 1건 정리 가능'), true);
+    assert.strictEqual(settingsEl.innerHTML.includes('Settings.pruneOrphans()'), true);
+    assert.strictEqual(settingsEl.innerHTML.includes('Settings.clearDocCacheOnly()'), true);
+
+    const deletedOrphans = await Settings.pruneOrphans();
+    assert.strictEqual(deletedOrphans, 1, 'Settings.pruneOrphans()가 고아 문서 1건을 정리해야 합니다.');
+    assert.strictEqual(await storage.getDocument('doc-orphan'), null);
+
+    global.fetch = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, documents: App.documents })
+    });
+    await Settings.clearDocCacheOnly();
+    assert.strictEqual(await storage.getDocument('doc-1'), null, '문서 캐시 비우기 후 doc-1 본문이 삭제되어야 합니다.');
+    const logsAfterClear = await storage.getAllLogs();
+    assert.strictEqual(logsAfterClear.length, 1, 'Settings.clearDocCacheOnly() 실행 후에도 학습 기록(studyLogs)은 100% 보존되어야 합니다.');
+
+    delete global.window.indexedDB;
+    console.log('✅ [Test 14 PASS] Settings 오프라인 캐시 관리 패널, 고아 정리, studyLogs 보존 검증 완료');
+  }
+}

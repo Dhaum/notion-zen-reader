@@ -24,15 +24,60 @@ const Reader = {
     }
   },
 
-  async open(docId, pushHistory = true) {
+  _openSeq: 0,
+
+  async applyLocalMetadata(docId, doc, { markSynced = true } = {}) {
+    if (!doc) return;
+
+    // 태블릿 로컬 IndexedDB의 회독수 및 복습일자 반영
+    if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.getDocStatsMap === 'function') {
+      try {
+        const statsMap = await ZenStorage.getDocStatsMap();
+        if (statsMap && statsMap[docId]) {
+          doc.reviewCount = Math.max(doc.reviewCount || 0, statsMap[docId].reviewCount || 0);
+          if (statsMap[docId].lastReviewedAt) {
+            doc.lastReviewedAt = statsMap[docId].lastReviewedAt;
+          }
+        }
+      } catch (e) {
+        console.warn('[Reader] 로컬 통계 맵 조회 실패:', e);
+      }
+    }
+
+    // 로컬 동기화 타임스탬프 및 오프라인 캐시 상태 갱신
     if (typeof App !== 'undefined') {
+      if (App.offlineDocIds && typeof App.offlineDocIds.add === 'function') {
+        App.offlineDocIds.add(docId);
+      }
+      if (markSynced) {
+        if (typeof App.setDocSyncMap === 'function') {
+          App.setDocSyncMap(docId, doc.updatedAt);
+        }
+        if (Array.isArray(App.documents)) {
+          const target = App.documents.find(d => d.id === docId);
+          if (target) {
+            target.hasUpdate = false;
+            target.isCachedLocally = true;
+            if (doc.updatedAt) target.updatedAt = doc.updatedAt;
+          }
+        }
+      }
+    }
+  },
+
+  async open(docId, pushHistory = true) {
+    const openToken = ++this._openSeq;
+
+    if (typeof App !== 'undefined' && typeof App.showView === 'function') {
       App.showView('reader', false);
     }
     if (pushHistory && typeof history !== 'undefined' && history.pushState) {
       history.pushState({ view: 'reader', docId }, '', `#read/${docId}`);
     }
 
-    const container = document.getElementById('reader-content');
+    const container = (typeof document !== 'undefined' && document.getElementById)
+      ? document.getElementById('reader-content')
+      : null;
     if (!container) return;
     container.innerHTML = '<div style="text-align: center; padding: 60px 0; color: var(--text-muted);">문서를 불러오는 중입니다...</div>';
 
@@ -48,63 +93,168 @@ const Reader = {
       this.durationSeconds++;
       this.updateTimerDisplay();
     }, 1000);
+    if (this.readingTimer && typeof this.readingTimer.unref === 'function') {
+      this.readingTimer.unref();
+    }
 
     // 플로팅 독 표시
     this.showFloatingDock(true);
 
+    const cachedDoc = (typeof ZenStorage !== 'undefined' && typeof ZenStorage.getDocument === 'function')
+      ? await ZenStorage.getDocument(docId).catch(() => null)
+      : null;
+    const listDoc = (typeof App !== 'undefined' && Array.isArray(App.documents))
+      ? App.documents.find(d => d.id === docId)
+      : null;
+    const isOffline = (typeof navigator !== 'undefined' && navigator.onLine === false);
+
+    // 1) 오프라인 & 로컬 캐시 존재: 즉시 오프라인 렌더링 (네트워크 대기 0ms)
+    if (isOffline && cachedDoc) {
+      const cacheStatus = (listDoc && listDoc.hasUpdate) ? 'outdated' : 'offline';
+      this.currentDoc = cachedDoc;
+      await this.applyLocalMetadata(docId, this.currentDoc, { markSynced: cacheStatus !== 'outdated' });
+      this.render(this.currentDoc, { cacheStatus });
+      this.renderTocRail();
+      this.setupSwipeToBack();
+      this.setupSmartScroll();
+      if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+        window.scrollTo(0, 0);
+      }
+      return;
+    }
+
+    // 2) 온라인 & 로컬 캐시 최신본 존재: 0ms SWR 즉시 렌더링 후 백그라운드 재검증
+    if (!isOffline && cachedDoc && !(listDoc && listDoc.hasUpdate)) {
+      this.currentDoc = cachedDoc;
+      await this.applyLocalMetadata(docId, this.currentDoc);
+      this.render(this.currentDoc, { cacheStatus: 'synced' });
+      this.renderTocRail();
+      this.setupSwipeToBack();
+      this.setupSmartScroll();
+      if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+        window.scrollTo(0, 0);
+      }
+
+      this._revalidationPromise = (async () => {
+        try {
+          const response = await fetch(`/api/documents/${docId}`, {
+            headers: {
+              'x-zen-pin': (typeof localStorage !== 'undefined' && localStorage.getItem('zen_pin_code')) || ''
+            }
+          });
+          if (!response || response.ok === false || response.status === 401) return;
+          const data = await response.json();
+          if (!data || !data.success || !data.document) return;
+
+          const remoteDoc = data.document;
+          const remoteTime = remoteDoc.updatedAt ? new Date(remoteDoc.updatedAt).getTime() : 0;
+          const localTime = cachedDoc.updatedAt ? new Date(cachedDoc.updatedAt).getTime() : 0;
+          if (!isNaN(remoteTime) && !isNaN(localTime) && remoteTime > localTime) {
+            if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.saveDocument === 'function') {
+              await ZenStorage.saveDocument(remoteDoc);
+            }
+            if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.prefetchDocumentImages === 'function') {
+              ZenStorage.prefetchDocumentImages(remoteDoc, 3).catch(() => {});
+            }
+            if (this._openSeq === openToken && this.currentDoc && this.currentDoc.id === docId) {
+              const prevScrollY = (typeof window !== 'undefined' && typeof window.scrollY === 'number') ? window.scrollY : 0;
+              const prevReviewCount = this.currentDoc.reviewCount;
+              const prevLastReviewedAt = this.currentDoc.lastReviewedAt;
+
+              this.currentDoc = remoteDoc;
+              if (prevReviewCount) {
+                this.currentDoc.reviewCount = Math.max(this.currentDoc.reviewCount || 0, prevReviewCount);
+              }
+              if (prevLastReviewedAt && !this.currentDoc.lastReviewedAt) {
+                this.currentDoc.lastReviewedAt = prevLastReviewedAt;
+              }
+              await this.applyLocalMetadata(docId, this.currentDoc);
+              this.render(this.currentDoc, { cacheStatus: 'synced' });
+              this.renderTocRail();
+              this.setupSmartScroll();
+              if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+                window.scrollTo(0, prevScrollY);
+              }
+              if (typeof App !== 'undefined' && typeof App.showToast === 'function') {
+                App.showToast('✨ 최신 노션 내용으로 업데이트되었습니다.');
+              }
+            }
+          }
+        } catch (_) {
+          // 백그라운드 재검증 실패 시 로컬 캐시 유지
+        }
+      })();
+      return;
+    }
+
+    // 3) 미저장 문서 또는 수정 감지 문서: 네트워크 Fetch 후 로컬 영구 저장 (실패 시 cachedDoc 폴백)
     try {
-      const response = await fetch(`/api/documents/${docId}`, {
+      const needsRefresh = Boolean(listDoc && listDoc.hasUpdate);
+      const response = await fetch(`/api/documents/${docId}${needsRefresh ? '?refresh=true' : ''}`, {
         headers: {
-          'x-zen-pin': localStorage.getItem('zen_pin_code') || ''
+          'x-zen-pin': (typeof localStorage !== 'undefined' && localStorage.getItem('zen_pin_code')) || ''
         }
       });
-      if (response.status === 401 && typeof App !== 'undefined') {
+      if (response.status === 401 && typeof App !== 'undefined' && typeof App.handleUnauthorized === 'function') {
         App.handleUnauthorized();
-        throw new Error("인증 실패: 올바른 PIN 번호가 필요합니다.");
+        const authErr = new Error("인증 실패: 올바른 PIN 번호가 필요합니다.");
+        authErr.isUnauthorized = true;
+        throw authErr;
+      }
+      if (response.ok === false) {
+        let errBody = {};
+        try { errBody = await response.json(); } catch (_) {}
+        throw new Error(errBody.error || errBody.message || `서버 오류 (${response.status})`);
       }
       const data = await response.json();
-      if (!data.success || !data.document) {
-        throw new Error(data.error || "문서를 찾을 수 없습니다.");
+      if (!data || !data.success || !data.document) {
+        throw new Error((data && (data.error || data.message)) || "문서를 찾을 수 없습니다.");
       }
 
       this.currentDoc = data.document;
 
-      // 태블릿 로컬 IndexedDB의 회독수 및 복습일자 반영
-      if (typeof ZenStorage !== 'undefined') {
+      if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.saveDocument === 'function') {
         try {
-          const statsMap = await ZenStorage.getDocStatsMap();
-          if (statsMap[docId]) {
-            this.currentDoc.reviewCount = Math.max(this.currentDoc.reviewCount || 0, statsMap[docId].reviewCount);
-            if (statsMap[docId].lastReviewedAt) {
-              this.currentDoc.lastReviewedAt = statsMap[docId].lastReviewedAt;
-            }
-          }
+          await ZenStorage.saveDocument(this.currentDoc);
         } catch (e) {
-          console.warn('[Reader] 로컬 통계 맵 조회 실패:', e);
+          console.warn('[Reader] ZenStorage 문서 저장 실패:', e);
         }
       }
-
-      // 로컬 동기화 타임스탬프 갱신 (열람 시 최신 상태로 동기화 기록)
-      if (typeof App !== 'undefined') {
-        if (App.setDocSyncMap) {
-          App.setDocSyncMap(docId, this.currentDoc.updatedAt);
-        }
-        if (App.documents) {
-          const cachedDoc = App.documents.find(d => d.id === docId);
-          if (cachedDoc) cachedDoc.hasUpdate = false;
-        }
+      if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.prefetchDocumentImages === 'function') {
+        ZenStorage.prefetchDocumentImages(this.currentDoc, 3).catch(() => {});
       }
 
-      this.render(this.currentDoc);
+      await this.applyLocalMetadata(docId, this.currentDoc);
+
+      this.render(this.currentDoc, { cacheStatus: 'synced' });
       this.renderTocRail();
       this.setupSwipeToBack();
       this.setupSmartScroll();
-      window.scrollTo(0, 0);
+      if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+        window.scrollTo(0, 0);
+      }
     } catch (err) {
+      if (!err.isUnauthorized && cachedDoc) {
+        const cacheStatus = (listDoc && listDoc.hasUpdate) ? 'outdated' : 'offline';
+        this.currentDoc = cachedDoc;
+        await this.applyLocalMetadata(docId, this.currentDoc, { markSynced: cacheStatus !== 'outdated' });
+        this.render(this.currentDoc, { cacheStatus });
+        this.renderTocRail();
+        this.setupSwipeToBack();
+        this.setupSmartScroll();
+        if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+          window.scrollTo(0, 0);
+        }
+        if (typeof App !== 'undefined' && typeof App.showToast === 'function') {
+          App.showToast('📡 오프라인 저장본을 열람합니다.');
+        }
+        return;
+      }
+
       container.innerHTML = `
         <div style="text-align: center; padding: 40px; color: var(--danger);">
           <h3>문서를 불러올 수 없습니다</h3>
-          <p style="margin: 10px 0; color: var(--text-muted); font-size: 0.88rem;">${err.message}</p>
+          <p style="margin: 10px 0; color: var(--text-muted); font-size: 0.88rem;">${this.escapeHtml(err.message)}</p>
           <button class="btn" onclick="Reader.goBack()">← 서재로 돌아가기</button>
         </div>
       `;
@@ -130,14 +280,21 @@ const Reader = {
 
   // 하단 플로팅 아일랜드 독 노출/숨김
   showFloatingDock(visible) {
+    if (typeof document === 'undefined' || !document.getElementById) return;
     const dock = document.getElementById('zen-floating-dock');
     if (!dock) return;
     if (visible) {
-      dock.style.display = 'flex';
-      setTimeout(() => dock.classList.add('visible'), 50);
+      if (dock.style) dock.style.display = 'flex';
+      const t = setTimeout(() => {
+        if (dock.classList && typeof dock.classList.add === 'function') dock.classList.add('visible');
+      }, 50);
+      if (t && typeof t.unref === 'function') t.unref();
     } else {
-      dock.classList.remove('visible');
-      setTimeout(() => { dock.style.display = 'none'; }, 280);
+      if (dock.classList && typeof dock.classList.remove === 'function') dock.classList.remove('visible');
+      const t = setTimeout(() => {
+        if (dock.style) dock.style.display = 'none';
+      }, 280);
+      if (t && typeof t.unref === 'function') t.unref();
     }
   },
 
@@ -158,37 +315,42 @@ const Reader = {
   // 현재 열람 중인 단일 문서만 노션 API에서 실시간 1:1 핀포인트 최신화 (~0.4초 소요)
   async refreshCurrentDoc() {
     if (!this.currentDoc || !this.currentDoc.id) {
-      if (typeof App !== 'undefined') App.showToast('새로고침할 문서가 없습니다.');
+      if (typeof App !== 'undefined' && typeof App.showToast === 'function') App.showToast('새로고침할 문서가 없습니다.');
       return;
     }
 
     const docId = this.currentDoc.id;
     const docTitle = this.currentDoc.title || '문서';
     const shortTitle = docTitle.length > 18 ? docTitle.slice(0, 18) + '...' : docTitle;
-    const refreshBtn = document.getElementById('btn-reader-pinpoint-refresh');
-    const headerRefreshBtn = document.getElementById('header-refresh-btn');
+    const refreshBtn = (typeof document !== 'undefined' && document.getElementById) ? document.getElementById('btn-reader-pinpoint-refresh') : null;
+    const headerRefreshBtn = (typeof document !== 'undefined' && document.getElementById) ? document.getElementById('header-refresh-btn') : null;
 
-    if (refreshBtn) refreshBtn.classList.add('spinning');
-    if (headerRefreshBtn) headerRefreshBtn.classList.add('spinning');
-    if (typeof App !== 'undefined') {
+    if (refreshBtn && refreshBtn.classList) refreshBtn.classList.add('spinning');
+    if (headerRefreshBtn && headerRefreshBtn.classList) headerRefreshBtn.classList.add('spinning');
+    if (typeof App !== 'undefined' && typeof App.showToast === 'function') {
       App.showToast(`🔄 [${shortTitle}] 노션 최신 내용 대조 중...`);
     }
 
     try {
       const response = await fetch(`/api/documents/${docId}?refresh=true`, {
         headers: {
-          'x-zen-pin': localStorage.getItem('zen_pin_code') || ''
+          'x-zen-pin': (typeof localStorage !== 'undefined' && localStorage.getItem('zen_pin_code')) || ''
         }
       });
 
-      if (response.status === 401 && typeof App !== 'undefined') {
+      if (response.status === 401 && typeof App !== 'undefined' && typeof App.handleUnauthorized === 'function') {
         App.handleUnauthorized();
         throw new Error("인증 실패: 올바른 PIN 번호가 필요합니다.");
       }
+      if (response.ok === false) {
+        let errBody = {};
+        try { errBody = await response.json(); } catch (_) {}
+        throw new Error(errBody.error || errBody.message || `서버 오류 (${response.status})`);
+      }
 
       const data = await response.json();
-      if (!data.success || !data.document) {
-        throw new Error(data.error || "최신 문서를 불러오지 못했습니다.");
+      if (!data || !data.success || !data.document) {
+        throw new Error((data && (data.error || data.message)) || "최신 문서를 불러오지 못했습니다.");
       }
 
       // 회독수 및 복습일자 보존
@@ -210,25 +372,32 @@ const Reader = {
         this.currentDoc.lastReviewedAt = prevLastReviewedAt;
       }
 
+      if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.saveDocument === 'function') {
+        try {
+          await ZenStorage.saveDocument(this.currentDoc);
+        } catch (e) {
+          console.warn('[Reader] ZenStorage 문서 갱신 저장 실패:', e);
+        }
+      }
+      if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.prefetchDocumentImages === 'function') {
+        ZenStorage.prefetchDocumentImages(this.currentDoc, 3).catch(() => {});
+      }
+
+      await this.applyLocalMetadata(docId, this.currentDoc);
+
       // 4대 안전장치: 독서 타이머(durationSeconds, readingStartTime)는 절대 초기화하지 않고 연속 유지!
-      const currentScrollY = window.scrollY;
+      const currentScrollY = (typeof window !== 'undefined' && typeof window.scrollY === 'number') ? window.scrollY : 0;
 
-      // 본문 재렌더링
-      this.render(this.currentDoc);
+      // 본문 및 목차 재렌더링
+      this.render(this.currentDoc, { cacheStatus: 'synced' });
+      this.renderTocRail();
       this.setupSmartScroll();
-      window.scrollTo(0, currentScrollY);
+      if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+        window.scrollTo(0, currentScrollY);
+      }
 
-      // 로컬 동기화 타임스탬프 갱신
-      if (typeof App !== 'undefined') {
-        if (App.setDocSyncMap) {
-          App.setDocSyncMap(docId, this.currentDoc.updatedAt);
-        }
-        if (App.documents) {
-          const cachedDoc = App.documents.find(d => d.id === docId);
-          if (cachedDoc) cachedDoc.hasUpdate = false;
-        }
-
-        // 실제 작동 상태에 따른 1:1 정밀 팝업 (혼선 원천 방지)
+      // 실제 작동 상태에 따른 1:1 정밀 팝업 (혼선 원천 방지)
+      if (typeof App !== 'undefined' && typeof App.showToast === 'function') {
         if (isModifiedInNotion) {
           App.showToast(`✨ [${shortTitle}] 노션 최신 수정본으로 실시간 갱신되었습니다!`);
         } else {
@@ -237,18 +406,45 @@ const Reader = {
       }
     } catch (err) {
       console.error('[Reader] 실시간 동기화 오류:', err);
-      if (typeof App !== 'undefined') {
+      if (typeof App !== 'undefined' && typeof App.showToast === 'function') {
         App.showToast(`⚠️ 실시간 동기화 실패: ${err.message}`);
       }
     } finally {
-      if (refreshBtn) refreshBtn.classList.remove('spinning');
-      if (headerRefreshBtn) headerRefreshBtn.classList.remove('spinning');
+      if (refreshBtn && refreshBtn.classList) refreshBtn.classList.remove('spinning');
+      if (headerRefreshBtn && headerRefreshBtn.classList) headerRefreshBtn.classList.remove('spinning');
     }
   },
 
-  render(doc) {
-    const container = document.getElementById('reader-content');
+  render(doc, options = {}) {
+    const container = (typeof document !== 'undefined' && document.getElementById)
+      ? document.getElementById('reader-content')
+      : null;
+    if (!container) return;
+
+    this.headingsList = [];
+    this.headingCounter = 0;
+
     const lastDate = doc.lastReviewedAt ? new Date(doc.lastReviewedAt).toLocaleDateString() : '기록 없음';
+    const cacheStatus = (options && options.cacheStatus) ? options.cacheStatus : null;
+
+    let cacheBannerHtml = '';
+    if (cacheStatus === 'outdated') {
+      cacheBannerHtml = `
+        <div class="reader-cache-banner banner-outdated">
+          <span>⚠️ 로컬 캐시본 열람 중 (노션에 최신 수정본이 있습니다)</span>
+          <button class="btn btn-sm" onclick="Reader.refreshCurrentDoc()">🔄 최신본 동기화</button>
+        </div>
+      `;
+    } else if (cacheStatus === 'offline') {
+      const refRaw = doc.cachedAt || doc.updatedAt;
+      const refDateObj = refRaw ? new Date(refRaw) : null;
+      const refDateStr = (refDateObj && !isNaN(refDateObj.getTime())) ? refDateObj.toLocaleDateString() : '로컬 저장소';
+      cacheBannerHtml = `
+        <div class="reader-cache-banner banner-offline">
+          <span>📦 오프라인 저장본 열람 중 (기준: ${this.escapeHtml(refDateStr)})</span>
+        </div>
+      `;
+    }
 
     let html = `
       <div class="reader-header">
@@ -274,6 +470,7 @@ const Reader = {
             🏆 누적 ${doc.reviewCount || 0}회독
           </div>
         </div>
+        ${cacheBannerHtml}
       </div>
       <div class="reader-body">
     `;
@@ -530,9 +727,10 @@ const Reader = {
 
   // 스마트 스크롤: 헤더 자동 숨김 & 앰비언트 진행률 바 & 마이크로 목차 스크롤 스파이
   setupSmartScroll() {
-    this.lastScrollY = window.scrollY;
-    const header = document.querySelector('.zen-header');
-    const progressBar = document.getElementById('reading-progress-bar');
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    this.lastScrollY = window.scrollY || 0;
+    const header = document.querySelector ? document.querySelector('.zen-header') : null;
+    const progressBar = document.getElementById ? document.getElementById('reading-progress-bar') : null;
 
     window.onscroll = () => {
       const currentY = window.scrollY;
@@ -573,10 +771,12 @@ const Reader = {
 
   // 긴 임상 매뉴얼용 마이크로 목차 레일 렌더링 (헤딩 2개 이상일 때만 노출)
   renderTocRail() {
+    if (typeof document === 'undefined' || !document.getElementById) return;
     const existing = document.getElementById('zen-toc-rail');
     if (existing && existing.remove) existing.remove();
 
     if (!this.headingsList || this.headingsList.length < 2) return;
+    if (typeof document.createElement !== 'function' || !document.body || typeof document.body.appendChild !== 'function') return;
 
     const rail = document.createElement('div');
     rail.id = 'zen-toc-rail';
@@ -641,15 +841,19 @@ const Reader = {
       }
     };
 
-    window.addEventListener('touchstart', this.handleTouchStart, { passive: true });
-    window.addEventListener('touchend', this.handleTouchEnd, { passive: true });
-    this.swipeHandlerAttached = true;
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('touchstart', this.handleTouchStart, { passive: true });
+      window.addEventListener('touchend', this.handleTouchEnd, { passive: true });
+      this.swipeHandlerAttached = true;
+    }
   },
 
   removeSwipeToBack() {
     if (this.swipeHandlerAttached) {
-      window.removeEventListener('touchstart', this.handleTouchStart);
-      window.removeEventListener('touchend', this.handleTouchEnd);
+      if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+        window.removeEventListener('touchstart', this.handleTouchStart);
+        window.removeEventListener('touchend', this.handleTouchEnd);
+      }
       this.swipeHandlerAttached = false;
     }
   },
@@ -739,6 +943,7 @@ const Reader = {
   },
 
   cleanup() {
+    this._openSeq++;
     if (this.readingTimer) clearInterval(this.readingTimer);
     window.onscroll = null;
     this.removeSwipeToBack();

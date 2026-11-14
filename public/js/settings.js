@@ -11,7 +11,7 @@ const Settings = {
 
       // 2. 태블릿 IndexedDB 스토리지 추정치 및 영구 락 확인
       let storageEstimate = { usageMB: '0.00', quotaMB: '0.00' };
-      if (navigator.storage && navigator.storage.estimate) {
+      if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.estimate) {
         try {
           const est = await navigator.storage.estimate();
           storageEstimate.usageMB = ((est.usage || 0) / (1024 * 1024)).toFixed(2);
@@ -19,13 +19,25 @@ const Settings = {
         } catch (e) {}
       }
 
-      const isPersisted = (typeof OfflineManager !== 'undefined') ? OfflineManager.isPersisted : true;
+      const isPersisted = (typeof OfflineManager !== 'undefined') ? Boolean(OfflineManager.isPersisted) : false;
 
       // 3. 누적 로컬 로그 수 확인
       let localLogsCount = 0;
-      if (typeof ZenStorage !== 'undefined') {
+      if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.getAllLogs === 'function') {
         const logs = await ZenStorage.getAllLogs();
         localLogsCount = logs.length;
+      }
+
+      // 3-1. 오프라인 문서 본문 캐시 요약 집계
+      let cacheSummary = null;
+      if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.getOfflineCacheSummary === 'function') {
+        try {
+          cacheSummary = await ZenStorage.getOfflineCacheSummary(
+            (typeof App !== 'undefined' && Array.isArray(App.documents)) ? App.documents : []
+          );
+        } catch (e) {
+          console.warn('[Settings] 오프라인 캐시 요약 조회 실패:', e);
+        }
       }
 
       // 4. 현재 테마 및 글자 크기
@@ -37,10 +49,11 @@ const Settings = {
         storageEstimate,
         isPersisted,
         localLogsCount,
+        cacheSummary,
         currentTheme,
         currentFontSize,
-        isOnline: navigator.onLine,
-        docsCount: (typeof App !== 'undefined' && App.documents) ? App.documents.length : 140
+        isOnline: (typeof navigator !== 'undefined' && navigator.onLine !== undefined) ? navigator.onLine : true,
+        docsCount: (typeof App !== 'undefined' && Array.isArray(App.documents)) ? App.documents.length : 0
       });
     } catch (err) {
       console.error('[Settings] 설정 화면 로딩 오류:', err);
@@ -58,8 +71,33 @@ const Settings = {
     const container = document.getElementById('settings-content');
     if (!container) return;
 
-    const queueCount = data.queue.length;
-    const isOnline = data.isOnline;
+    const queue = Array.isArray(data.queue) ? data.queue : [];
+    const queueCount = queue.length;
+    const isOnline = Boolean(data.isOnline);
+    const storageEstimate = data.storageEstimate || { usageMB: '0.00', quotaMB: '0.00' };
+    const localLogsCount = Number(data.localLogsCount || 0);
+    const isPersisted = Boolean(data.isPersisted);
+
+    const summary = data.cacheSummary || {
+      totalRemote: data.docsCount || 0,
+      cachedCount: 0,
+      upToDateCount: 0,
+      outdatedCount: 0,
+      missingCount: data.docsCount || 0,
+      orphanCount: 0,
+      approxSizeKB: 0,
+      lastCachedAt: null
+    };
+    const totalRemote = Number(summary.totalRemote || 0);
+    const cachedCount = Number(summary.cachedCount || 0);
+    const upToDateCount = Number(summary.upToDateCount || 0);
+    const outdatedCount = Number(summary.outdatedCount || 0);
+    const missingCount = Number(summary.missingCount || 0);
+    const orphanCount = Number(summary.orphanCount || 0);
+    const approxSizeKB = Number(summary.approxSizeKB || 0);
+    const lastCachedLabel = summary.lastCachedAt
+      ? new Date(summary.lastCachedAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : '없음';
 
     let html = `
       <div class="settings-container">
@@ -153,7 +191,7 @@ const Settings = {
 
           <!-- 대기 큐 미리보기 목록 -->
           <div class="queue-box">
-            ${queueCount > 0 ? data.queue.slice(0, 5).map(item => `
+            ${queueCount > 0 ? queue.slice(0, 5).map(item => `
               <div class="queue-item">
                 <div class="queue-item-left">
                   <span class="queue-icon">⏳</span>
@@ -193,8 +231,8 @@ const Settings = {
               <span class="panel-icon">🛡️</span>
               <h2 class="panel-title">태블릿 SSD 영구 보존 및 물리 백업</h2>
             </div>
-            <span class="lock-status-badge">
-              ${data.isPersisted ? '🔒 Persistent Lock 승인' : '일반 보존'}
+            <span class="lock-status-badge ${isPersisted ? '' : 'lock-status-pending'}">
+              ${isPersisted ? '🔒 Persistent Lock 승인' : '⚠️ 일반 보존 (대기)'}
             </span>
           </div>
           <p class="panel-desc">
@@ -204,15 +242,17 @@ const Settings = {
           <div class="storage-metrics-grid">
             <div class="metric-card">
               <span class="metric-label">로컬 누적 로그</span>
-              <span class="metric-val">${data.localLogsCount}건 기록됨</span>
+              <span class="metric-val">${localLogsCount}건 기록됨</span>
             </div>
             <div class="metric-card">
               <span class="metric-label">스토리지 사용량</span>
-              <span class="metric-val">${data.storageEstimate.usageMB} MB / SSD</span>
+              <span class="metric-val">${storageEstimate.usageMB} MB / SSD</span>
             </div>
             <div class="metric-card">
               <span class="metric-label">OS 캐시 정리 방어</span>
-              <span class="metric-val" style="color: var(--success);">면제 승인 완료</span>
+              <span class="metric-val" style="color: ${isPersisted ? 'var(--success)' : 'var(--warning)'};">
+                ${isPersisted ? '면제 승인 완료' : '일반 보존 (요청 대기)'}
+              </span>
             </div>
           </div>
 
@@ -232,32 +272,77 @@ const Settings = {
           </div>
         </div>
 
-        <!-- 4. 140개 전 문서 오프라인 일괄 다운로드 & PIN 보안 게이트 -->
-        <div class="grid-two-cards">
-          <!-- 오프라인 다운로드 -->
-          <div class="settings-subcard">
-            <div class="subcard-header">
-              <span class="subcard-icon">📦</span>
-              <h3 class="subcard-title">140개 전 문서 오프라인 사전 다운로드</h3>
+        <!-- 4. 오프라인 문서 본문 캐시 & 증분 저장소 관리 -->
+        <div class="settings-panel">
+          <div class="panel-header">
+            <div class="panel-title-wrap">
+              <span class="panel-icon">📦</span>
+              <h2 class="panel-title">오프라인 문서 본문 캐시 관리</h2>
             </div>
-            <p class="subcard-desc">
-              야외나 비행기에서도 데이터 소모 없이 전 문서를 100% 오프라인 열람합니다.
-            </p>
-            <button onclick="App.downloadAllForOffline()" class="btn btn-secondary w-full">
-              📥 전체 문서 오프라인 캐싱
-            </button>
+            <span class="queue-status-pill ${totalRemote > 0 && missingCount === 0 && outdatedCount === 0 ? 'pill-success' : 'pill-warning'}">
+              ${totalRemote > 0 && missingCount === 0 && outdatedCount === 0 ? '전 문서 최신 저장됨' : `미저장 ${missingCount} · 수정 ${outdatedCount}`}
+            </span>
+          </div>
+          <p class="panel-desc">
+            IndexedDB(<code>ZenReaderDB</code>)에 저장된 문서 본문·이미지 캐시 현황입니다. 미저장·수정 문서만 골라 증분 저장하거나, 학습 기록(회독수/히트맵)을 100% 유지한 채 문서 캐시만 비울 수 있습니다.
+          </p>
+
+          <div class="cache-summary-text">
+            <div>저장 완료: <strong>${cachedCount} / ${totalRemote}건</strong> (미저장 ${missingCount}건, 업데이트 필요 ${outdatedCount}건)</div>
+            <div>문서 본문 캐시 용량: <strong>약 ${approxSizeKB} KB</strong>${orphanCount > 0 ? ` · <span class="cache-orphan-warn">고아 문서 ${orphanCount}건 정리 가능</span>` : ''}</div>
           </div>
 
-          <!-- PIN 보안 잠금 -->
-          <div class="settings-subcard">
-            <div class="subcard-header">
-              <span class="subcard-icon">🔐</span>
-              <h3 class="subcard-title">PIN 보안 게이트 관리</h3>
+          <div class="cache-stats-grid">
+            <div class="cache-stat-pill pill-accent">
+              <span class="cache-stat-label">저장 완료 / 전체</span>
+              <span class="cache-stat-value">${cachedCount} / ${totalRemote}건</span>
             </div>
-            <p class="subcard-desc">
+            <div class="cache-stat-pill">
+              <span class="cache-stat-label">최신 본문</span>
+              <span class="cache-stat-value">${upToDateCount}건</span>
+            </div>
+            <div class="cache-stat-pill ${outdatedCount > 0 || missingCount > 0 ? 'pill-warn' : ''}">
+              <span class="cache-stat-label">미저장 / 업데이트 필요</span>
+              <span class="cache-stat-value">${missingCount}건 / ${outdatedCount}건</span>
+            </div>
+            <div class="cache-stat-pill ${orphanCount > 0 ? 'pill-warn' : ''}">
+              <span class="cache-stat-label">캐시 용량 / 고아 문서</span>
+              <span class="cache-stat-value">약 ${approxSizeKB} KB · ${orphanCount}건</span>
+            </div>
+          </div>
+
+          <div class="cache-actions-row">
+            <button onclick="App.downloadAllForOffline(false)" class="btn btn-primary">
+              📥 미저장·수정 문서 증분 저장
+            </button>
+            <button onclick="App.downloadAllForOffline(true)" class="btn btn-secondary">
+              🔄 전체 강제 재다운로드
+            </button>
+            <button onclick="Settings.pruneOrphans()" class="btn btn-secondary" ${orphanCount === 0 ? 'disabled' : ''}>
+              🧹 고아 문서 정리
+            </button>
+            <button onclick="Settings.clearDocCacheOnly()" class="btn btn-danger-subtle">
+              🗑️ 문서 캐시만 비우기 (학습기록 보존)
+            </button>
+          </div>
+          <div class="footer-meta-text" style="margin-top: 10px;">
+            최근 본문 캐시 시각: <strong>${this.escapeHtml(lastCachedLabel)}</strong>
+          </div>
+        </div>
+
+        <!-- 5. PIN 보안 게이트 관리 -->
+        <div class="settings-panel">
+          <div class="panel-header">
+            <div class="panel-title-wrap">
+              <span class="panel-icon">🔐</span>
+              <h2 class="panel-title">PIN 보안 게이트 관리</h2>
+            </div>
+          </div>
+          <div class="panel-footer-actions" style="padding-top: 0;">
+            <div class="footer-meta-text">
               현재 PIN 번호로 안전하게 인증된 상태입니다. 타인 공유 시 즉시 잠글 수 있습니다.
-            </p>
-            <button onclick="Settings.lockApp()" class="btn btn-danger-subtle w-full">
+            </div>
+            <button onclick="Settings.lockApp()" class="btn btn-danger-subtle">
               🔒 서재 즉시 잠그기 (로그아웃)
             </button>
           </div>
@@ -348,6 +433,102 @@ const Settings = {
     input.value = '';
   },
 
+  async pruneOrphans() {
+    if (typeof ZenStorage === 'undefined' || typeof ZenStorage.pruneOrphanDocuments !== 'function') {
+      if (typeof App !== 'undefined' && App.showToast) {
+        App.showToast('⚠️ 저장소 모듈이 아직 초기화되지 않았습니다.');
+      }
+      return 0;
+    }
+
+    const validIds = (typeof App !== 'undefined' && Array.isArray(App.documents))
+      ? App.documents.map(d => d.id)
+      : [];
+
+    if (validIds.length === 0) {
+      if (typeof App !== 'undefined' && App.showToast) {
+        App.showToast('⚠️ 유효한 원격 문서 목록이 없어 고아 문서 정리를 건너뛰었습니다.');
+      }
+      return 0;
+    }
+
+    try {
+      const deletedCount = await ZenStorage.pruneOrphanDocuments(validIds);
+      if (typeof App !== 'undefined' && typeof App.refreshOfflineDocIds === 'function') {
+        await App.refreshOfflineDocIds();
+      }
+      await this.load();
+      if (typeof App !== 'undefined' && App.showToast) {
+        if (deletedCount > 0) {
+          App.showToast(`🧹 노션에서 삭제된 고아 문서 캐시 ${deletedCount}건을 정리했습니다.`);
+        } else {
+          App.showToast('✨ 정리할 고아 문서가 없습니다.');
+        }
+      }
+      return deletedCount;
+    } catch (err) {
+      console.error('[Settings] 고아 문서 정리 오류:', err);
+      if (typeof App !== 'undefined' && App.showToast) {
+        App.showToast('⚠️ 고아 문서 정리 실패: ' + err.message);
+      }
+      return 0;
+    }
+  },
+
+  async clearDocCacheOnly() {
+    if (typeof ZenStorage === 'undefined' || typeof ZenStorage.clearDocumentCache !== 'function') {
+      if (typeof App !== 'undefined' && App.showToast) {
+        App.showToast('⚠️ 저장소 모듈이 아직 초기화되지 않았습니다.');
+      }
+      return null;
+    }
+
+    const confirmed = (typeof confirm === 'function')
+      ? confirm(
+        '다운로드된 문서 본문·이미지 캐시만 삭제하시겠습니까?\n\n' +
+        '✅ 학습 기록(회독수, 공부 시간, 잔디 히트맵, 복습 일정)은 100% 그대로 보존됩니다.\n' +
+        '🗑️ 다운로드된 문서 본문·이미지 캐시만 비워지며, 온라인 시 언제든 다시 저장할 수 있습니다.'
+      )
+      : true;
+    if (!confirmed) return false;
+
+    try {
+      const result = await ZenStorage.clearDocumentCache();
+      const clearedCount = result && typeof result.clearedDocsCount === 'number' ? result.clearedDocsCount : 0;
+
+      if (typeof App !== 'undefined') {
+        if (Array.isArray(App.documents)) {
+          App.documents.forEach(doc => {
+            doc.hasUpdate = false;
+            doc.isCachedLocally = false;
+          });
+        }
+        if (typeof App.refreshOfflineDocIds === 'function') {
+          await App.refreshOfflineDocIds();
+        }
+        if (typeof App.loadDocuments === 'function') {
+          try {
+            await App.loadDocuments();
+          } catch (loadErr) {
+            console.warn('[Settings] 캐시 삭제 후 목록 재조회 건너뜀:', loadErr);
+          }
+        }
+      }
+
+      await this.load();
+      if (typeof App !== 'undefined' && App.showToast) {
+        App.showToast(`🗑️ 문서 캐시 ${clearedCount}건을 비웠습니다. (학습 기록 100% 보존됨)`);
+      }
+      return result;
+    } catch (err) {
+      console.error('[Settings] 문서 캐시 비우기 오류:', err);
+      if (typeof App !== 'undefined' && App.showToast) {
+        App.showToast('⚠️ 문서 캐시 비우기 실패: ' + err.message);
+      }
+      return null;
+    }
+  },
+
   lockApp() {
     localStorage.removeItem('zen_pin_verified');
     localStorage.removeItem('zen_pin_code');
@@ -362,4 +543,6 @@ const Settings = {
   }
 };
 
-window.Settings = Settings;
+if (typeof window !== 'undefined') {
+  window.Settings = Settings;
+}

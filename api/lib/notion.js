@@ -333,29 +333,62 @@ async function getNotionDocumentDetail(documentId, forceRefresh = false) {
   }
 }
 
-// 하위 블록(토글 내용 등) 재귀 조회 함수
-async function fetchBlocksRecursively(blockId) {
+function createConcurrencyLimiter(maxConcurrency = 3) {
+  let active = 0;
+  const queue = [];
+
+  const next = () => {
+    while (active < maxConcurrency && queue.length > 0) {
+      active++;
+      const { fn, resolve, reject } = queue.shift();
+      Promise.resolve()
+        .then(fn)
+        .then(resolve, reject)
+        .finally(() => {
+          active--;
+          next();
+        });
+    }
+  };
+
+  return (fn) => new Promise((resolve, reject) => {
+    queue.push({ fn, resolve, reject });
+    next();
+  });
+}
+
+// 하위 블록(토글 내용 등) 재귀 조회 함수 (순서 보존 + 최대 동시성 3 제한 병렬 수집)
+async function fetchBlocksRecursively(blockId, limiter = createConcurrencyLimiter(3)) {
   const blocks = [];
   let cursor = undefined;
 
   do {
     const client = getNotionClient();
-    const { results, next_cursor, has_more } = await withNotionRetry(
+    const { results, next_cursor, has_more } = await limiter(() => withNotionRetry(
       () => client.blocks.children.list({
         block_id: blockId,
         start_cursor: cursor,
         page_size: 100
       }),
       `blocks.children.list(${blockId})`
-    );
+    ));
 
+    const childTargets = [];
     for (const block of results) {
       const parsed = simplifyBlock(block);
+      blocks.push(parsed);
       // 토글, 테이블, 콜아웃, 인용구, 중첩 리스트, 컬럼, 코드 등 하위 자식을 갖는 모든 블록 재귀 탐색
       if (block.has_children && block.type !== 'child_page' && block.type !== 'child_database') {
-        parsed.children = await fetchBlocksRecursively(block.id);
+        childTargets.push({ blockId: block.id, parsed });
       }
-      blocks.push(parsed);
+    }
+
+    if (childTargets.length > 0) {
+      await Promise.all(
+        childTargets.map(async (target) => {
+          target.parsed.children = await fetchBlocksRecursively(target.blockId, limiter);
+        })
+      );
     }
 
     cursor = has_more ? next_cursor : undefined;

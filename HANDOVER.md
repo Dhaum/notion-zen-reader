@@ -5,19 +5,16 @@
 ---
 
 ## 1. 📌 다음 작업 재개 포인트 (Next Action)
-- **최우선 과제**: **알도큐브 8.4인치 태블릿 실기기 필드 테스트 및 사용자 체감 모니터링**
-- **완료된 작업 (2026-11-08 v17)**:
-  1. **정렬 기준 연동 스마트 날짜 전환 (1안)**: '🔄 최근 수정순' 정렬 시 자동으로 `🔄 24.11.08` 수정일자 뱃지로 전환, 생성일순 정렬 시에는 기존 생성일자 표시 및 정렬 변경 토스트 안내 연동.
-  2. **오프라인 뱃지 혼선 원천 해소**: 개별 카드에서 불필요한 `💾 오프라인` 뱃지를 완전 제거 (상단 📦 일괄 다운로드 및 데이터/설정 탭으로 관리 일원화).
-  3. **상단 우측 뱃지 그룹 고정 (.doc-card-badges)**: 회독수(`🏆 N회독`)를 상단 우측 상태 뱃지 좌측에 나란히 고정하여, SAMS 등 태그가 많은 문서에서도 뱃지가 하단으로 밀려나 카드 높이가 늘어나는 버그 100% 원천 차단.
-  4. **하단 메타 단일 행 슬림 뷰 (.doc-card-meta)**: `overflow-x: auto` 및 `white-space: nowrap` 적용으로 카드의 세로 높이를 항상 균일하고 단정하게 유지.
-  5. **시안 A 좌측 상태 인디케이터 바**: 완료(에메랄드 `#10b981`), 진행중(스카이블루), 시작전(슬레이트 그레이), 수정됨(골드/핑크 펄스 글로우) 4.5px 좌측 바 적용.
-  6. **바탕화면 튕김 원천 차단 & 스와이프 뒤로가기**: HTML5 History API(`pushState`/`popstate`) 연동 및 인앱 좌/우 베젤 엣지 스와이프(`Reader.setupSwipeToBack`) 구현.
-  7. **상단 크롬 스마트 압축 (Compress on Scroll)**: 서재 목록 스크롤 다운 시 검색/필터 영역 슬림 압축, 세로 뷰포트 극대화.
-  8. **온디맨드 주요 임상 태그 모아보기 바텀시트**: 검색창 우측 [🏷️ 태그] 토글 버튼 및 빈도순 Top 36 태그 칩 그리드.
-  9. **긴 임상 매뉴얼용 마이크로 목차 레일 (TOC Scrubber)**: 리더 화면 우측 가장자리 투명 도트 레일 및 스크롤 스파이/터치 점프.
-- **테스트 현황**: `scripts/test-cache-return.js` 9/9 단위 테스트 전체 통과 (Pass).
-- **에셋/서비스워커 버전**: `v17` (`zen-reader-v17`).
+- **최우선 과제**: **알도큐브 8.4인치 태블릿 실기기 필드 테스트 (v18 오프라인·증분 동기화 체감 검증)**
+- **완료된 작업 (2026-11-15 v18)**:
+  1. **IndexedDB `ZenReaderDB` v2 SSOT (`public/js/storage-idb.js`, `public/js/offline.js`)**: `DB_VERSION = 2`로 통일(`studyLogs` 100% 보존 + `documents`/`meta` 스토어 추가), `OfflineManager.openDB()`를 `ZenStorage.openDB()` 단일 프라미스에 위임해 `VersionError` 경합 제거. 문서 CRUD, `getOfflineCacheSummary`, `pruneOrphanDocuments`, `clearDocumentCache`(학습기록 보존), `prefetchDocumentImages`(동시성 3) 구현.
+  2. **Service Worker 캐시 분리 및 폴백 안전화 (`public/sw.js`)**: `zen-reader-v18`(앱 셸) / `zen-data-v1`(API 데이터) / `zen-images-v1`(이미지) 3분할 보존(`PRESERVED_CACHES`). `GET /api/*` 응답을 `event.waitUntil`로 `zen-data-v1`에 저장하며, `.js`/`.css` 오프라인 폴백은 `ignoreSearch: true` 후 503 반환(`/index.html` 오반환 차단), Section D는 `navigate` 요청만 `/index.html` 폴백.
+  3. **비파괴 오프라인 서재 & 0ms SWR 리더 (`public/js/app.js`, `public/js/reader.js`)**: `loadDocuments()` 오프라인/실패 시 기존 캐시 목록 보존 및 `ZenStorage.getDocumentList()` 복원, 미저장 카드 구분(`.card-offline-unavailable`, `.badge-doc-uncached`), `downloadAllForOffline(false)` 증분 동기화(Delta Sync) 및 `WakeLock` 적용. `Reader.open()`은 온라인 열람 본문을 즉시 IDB에 저장하며, 캐시 최신본은 0ms SWR + 백그라운드 재검증, 오프라인/구버전 열람 시 `.reader-cache-banner`(`banner-offline`/`banner-outdated`) 노출.
+  4. **설정 탭 오프라인 캐시 관리 & 버그 수정 (`public/js/settings.js`, `public/css/app.css`, `public/index.html`)**: Panel #3 영구 보존 락(`isPersisted`) 하드코딩 버그 수정, Panel #4 오프라인 문서 캐시 요약·증분 저장·전체 재다운로드·고아 정리(`pruneOrphans`)·학습기록 보존 초기화(`clearDocCacheOnly`) 구현, 4대 테마 호환 CSS 및 에셋 `?v=20261115_v18` 갱신.
+  5. **Notion 하위 블록 수집 최적화 (`api/lib/notion.js`)**: `fetchBlocksRecursively`에 블록 순서 보존 + `createConcurrencyLimiter(3)` 적용으로 대용량 문서 타임아웃 방어.
+- **이전 완료 (2026-11-08 v17)**: 스마트 날짜 전환(1안), 상단 회독수 고정, 시안 A 상태 인디케이터 바, History API/스와이프 뒤로가기, 상단 크롬 스크롤 압축, 태그 바텀시트, 마이크로 목차 레일(TOC Scrubber).
+- **테스트 현황**: `test-cache-return.js`(Tests 1..14, 15개 케이스), `test-sw-cache-matching.js`, `test-sw-image.js`, `test-change-detection.js`, `test-auth.js` 및 전 JS 파일 `node -c` 구문 검사 100% 통과.
+- **에셋/서비스워커 버전**: `v18` (`zen-reader-v18`, `zen-data-v1`, `?v=20261115_v18`).
 
 ---
 
@@ -26,8 +23,12 @@
 cd "C:\Users\dbswo\Desktop\AI Agents\Antigravity\Apps\notion-zen-reader"
 npm start
 # 브라우저에서 http://localhost:3000 접속 (기본 PIN: 1234)
-# 단위 테스트 검증
+# 단위/통합 테스트 검증
 node scripts/test-cache-return.js
+node scripts/test-sw-cache-matching.js
+node scripts/test-sw-image.js
+node scripts/test-change-detection.js
+node scripts/test-auth.js
 ```
 
 ---
@@ -35,26 +36,23 @@ node scripts/test-cache-return.js
 ## 3. 🚨 5대 하드코딩 엔지니어링 철칙 (Strict Constraints)
 1. **Notion 원본 100% 무손상 (Zero Write)**: Notion API는 오직 읽기(Read-only) 권한만 사용하며, 노션 DB 원본은 1비트도 수정하지 않는다.
 2. **태블릿 제로 트러스트 (Zero Notion Auth)**: 태블릿 환경에는 노션 API 키/토큰을 저장하지 않고 오직 4자리 PIN 번호로 웹앱만 잠금 해제한다.
-3. **8.4인치 태블릿(iPlay 60 mini pro) 맞춤 가독성**: 세로 모드 100% 전담 (가로 모드 스플릿 뷰는 사용자 피드백으로 전면 기각됨), 다크/라이트/세피아 테마 및 최적 줄간격(1.85) 유지.
-4. **오프라인 캐싱 보장 (Service Worker)**: 이미 로컬에 저장된 데이터는 네트워크 단절 시에도 0초 지연으로 즉각 표시되어야 함.
-5. **무빌드/경량 유지**: 복잡한 웹팩/Vite 빌드 체인 없이 단일 정적 서빙 및 바닐라 JS의 가벼움을 유지한다.
+3. **8.4인치 태블릿(iPlay 60 mini pro) 맞춤 가독성**: 세로 모드 100% 전담 (가로 모드 스플릿 뷰 기각), 다크/라이트/세피아/에버그린 4대 테마 및 최적 줄간격(1.85) 유지.
+4. **오프라인 캐싱 보장 (Service Worker + IndexedDB v2)**: 로컬에 저장된 목록·본문·학습기록은 네트워크 단절 시에도 0초 지연으로 비파괴 렌더링되며 `studyLogs`는 절대 삭제되지 않는다.
+5. **무빌드/경량 유지**: 웹팩/Vite 빌드 체인 없이 단일 정적 서빙 및 바닐라 JS의 가벼움을 유지한다.
 
 ---
 
 ## 4. 핵심 디렉토리 구조
 - `scripts/dev-server.js`: 로컬 개발용 경량 Node.js 서버 (API 프록시 및 정적 파일 서빙)
-- `public/`: 프론트엔드 PWA 자산 (`index.html`, `app.js`, `reader.js`, `style.css`, `manifest.json`, `sw.js`)
-- `api/`: Vercel 배포용 서버리스 엔드포인트
-- `data/`: 로컬 캐시 및 목업 데이터
+- `scripts/test-*.js`: 오프라인/캐시/SW/변경감지/PIN 보안 자동화 검증 스위트
+- `public/`: 프론트엔드 PWA 자산 (`index.html`, `sw.js`, `manifest.json`, `css/app.css`, `js/{storage-idb,offline,app,reader,dashboard,settings}.js`)
+- `api/`: Vercel 배포용 서버리스 엔드포인트 (`documents.js`, `document.js`, `study-log.js`, `study-stats.js`, `verify-pin.js`, `lib/{auth,notion,storage}.js`)
+- `data/`: 로컬 학습 로그(`study-logs.json`, gitignore 대상)
 
 ---
 
 ## 5. 📥 백로그 및 아이디어
-- [x] 목록 복귀 시 캐시 즉시 렌더링(0ms) 및 SWR 비파괴 파이프라인 구현 (2026-11-08 완료)
-- [x] 시안 A 상태 인디케이터 바 및 Flat 탈피 계층화 (2026-11-08 완료)
-- [x] 스와이프 뒤로가기 & 바탕화면 튕김 방지 History API (2026-11-08 완료)
-- [x] 상단 크롬 스마트 압축 (Compress on Scroll) (2026-11-08 완료)
-- [x] 온디맨드 태그 모아보기 바텀시트 (2026-11-08 완료)
-- [x] 마이크로 목차 레일 (TOC Scrubber) (2026-11-08 완료)
-- [x] 오프라인 저장 완료 인디케이터 (2026-11-08 완료)
+- [x] 목록 복귀 시 캐시 즉시 렌더링(0ms) 및 SWR 비파괴 파이프라인 구현 (2026-11-08 v17 완료)
+- [x] 시안 A 상태바, 스와이프/History 뒤로가기, 스크롤 압축, 태그 시트, TOC 레일 (2026-11-08 v17 완료)
+- [x] IndexedDB v2 문서 본문 영구 저장, 증분 동기화, SW 캐시 분리 및 설정 캐시 관리 (2026-11-15 v18 완료)
 - [ ] 알도큐브 실기기 필드 테스트 모니터링

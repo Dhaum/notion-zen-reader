@@ -1,5 +1,6 @@
 // public/sw.js - PWA 오프라인 캐싱, 영구 이미지 보존 및 백그라운드 동기화 서비스 워커
-const CACHE_NAME = 'zen-reader-v17';
+const CACHE_NAME = 'zen-reader-v18';
+const DATA_CACHE_NAME = 'zen-data-v1';
 const IMAGE_CACHE_NAME = 'zen-images-v1';
 
 const STATIC_ASSETS = [
@@ -71,9 +72,9 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// 2. 활성화 단계: 구버전 정적 캐시 정리 (※ zen-images-v1 영구 캐시는 절대 보존!)
+// 2. 활성화 단계: 구버전 정적 캐시 정리 (※ zen-data-v1, zen-images-v1 영구 캐시는 절대 보존!)
 self.addEventListener('activate', (event) => {
-  const PRESERVED_CACHES = [CACHE_NAME, IMAGE_CACHE_NAME];
+  const PRESERVED_CACHES = [CACHE_NAME, DATA_CACHE_NAME, IMAGE_CACHE_NAME];
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
@@ -159,27 +160,41 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          if (response.status === 200) {
-            const responseClone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
+          if (response && response.status === 200) {
+            const cloneForRequest = response.clone();
+            const cloneForNormalized = hasRefreshParam ? response.clone() : null;
+            const cacheWritePromise = caches.open(DATA_CACHE_NAME).then((cache) => {
               // 원본 요청 URL 및 정규화된 키 모두 캐싱하여 오프라인 매칭 보장
-              cache.put(event.request, responseClone.clone());
-              if (hasRefreshParam) {
-                cache.put(normalizedKey, responseClone);
+              const puts = [cache.put(event.request, cloneForRequest)];
+              if (hasRefreshParam && cloneForNormalized) {
+                puts.push(cache.put(normalizedKey, cloneForNormalized));
               }
+              return Promise.all(puts);
+            }).catch((err) => {
+              console.warn('[ServiceWorker] API 캐시 저장 경고:', err);
             });
+            event.waitUntil(cacheWritePromise);
           }
           return response;
         })
         .catch(async () => {
-          const cache = await caches.open(CACHE_NAME);
-          let cachedResponse = await cache.match(event.request);
-          if (!cachedResponse && hasRefreshParam) {
-            cachedResponse = await cache.match(normalizedKey);
-          }
+          const matchInCache = async (cacheName) => {
+            const cache = await caches.open(cacheName);
+            let match = await cache.match(event.request);
+            if (!match && hasRefreshParam) {
+              match = await cache.match(normalizedKey);
+            }
+            if (!match) {
+              match = await cache.match(event.request, { ignoreSearch: true });
+            }
+            return match || null;
+          };
+
+          let cachedResponse = await matchInCache(DATA_CACHE_NAME);
           if (!cachedResponse) {
-            cachedResponse = await cache.match(event.request, { ignoreSearch: true });
+            cachedResponse = await matchInCache(CACHE_NAME);
           }
+
           if (cachedResponse) {
             console.log('[ServiceWorker] 오프라인 API 캐시에서 반환:', url.pathname);
             return cachedResponse;
@@ -197,17 +212,33 @@ self.addEventListener('fetch', (event) => {
   }
 
   // C. 정적 코드 파일 (HTML, JS, CSS) -> Network First (온라인 시 최신 코드 100% 즉시 반영, 오프라인 시 캐시 폴백)
-  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname === '/' || url.pathname === '/index.html') {
+  const isCodeAsset = url.pathname.endsWith('.js') || url.pathname.endsWith('.css');
+  const isHtmlShell = url.pathname === '/' || url.pathname === '/index.html';
+  if (isCodeAsset || isHtmlShell) {
     event.respondWith(
       fetch(event.request)
         .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             const clone = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+            event.waitUntil(
+              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone)).catch(() => {})
+            );
           }
           return networkResponse;
         })
-        .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/index.html')))
+        .catch(() => {
+          if (isCodeAsset) {
+            return caches.match(event.request, { ignoreSearch: true }).then((cached) => {
+              if (cached) return cached;
+              return new Response('Offline asset unavailable', {
+                status: 503,
+                statusText: 'Service Unavailable',
+                headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+              });
+            });
+          }
+          return caches.match(event.request, { ignoreSearch: true }).then((cached) => cached || caches.match('/index.html'));
+        })
     );
     return;
   }
@@ -219,10 +250,17 @@ self.addEventListener('fetch', (event) => {
       return fetch(event.request).then((networkResponse) => {
         if (networkResponse && networkResponse.status === 200) {
           const clone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          event.waitUntil(
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone)).catch(() => {})
+          );
         }
         return networkResponse;
-      }).catch(() => caches.match('/index.html'));
+      }).catch(() => {
+        if (event.request.mode === 'navigate') {
+          return caches.match('/index.html');
+        }
+        return new Response('', { status: 503, statusText: 'Service Unavailable' });
+      });
     })
   );
 });

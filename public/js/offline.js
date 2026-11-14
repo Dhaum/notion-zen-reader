@@ -1,10 +1,10 @@
 // public/js/offline.js - 태블릿 PWA 영구 저장소(IndexedDB + Persistent Storage 락) 및 오프라인 동기화 매니저
 const OfflineManager = {
-  isOnline: navigator.onLine,
+  isOnline: (typeof navigator !== 'undefined' ? navigator.onLine : true),
   QUEUE_KEY: 'zen_offline_study_queue',
   LOCAL_LOGS_KEY: 'zen_permanent_logs',
   DB_NAME: 'ZenReaderDB',
-  DB_VERSION: 1,
+  DB_VERSION: 2,
   STORE_NAME: 'studyLogs',
   isPersisted: false,
   dbInstance: null,
@@ -38,7 +38,7 @@ const OfflineManager = {
 
   // 태블릿 크롬이 저장공간 부족 시 임의로 캐시/데이터를 날리지 못하도록 영구 보존 락 요청
   async requestPersistentStorage() {
-    if (navigator.storage && navigator.storage.persist) {
+    if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.persist) {
       try {
         const alreadyPersisted = await navigator.storage.persisted();
         if (alreadyPersisted) {
@@ -73,14 +73,25 @@ const OfflineManager = {
     }
   },
 
-  // IndexedDB 비동기 영구 저장소 열기
-  openDB() {
-    return new Promise((resolve, reject) => {
-      if (this.dbInstance) {
-        return resolve(this.dbInstance);
-      }
+  // IndexedDB 비동기 영구 저장소 열기 (ZenStorage v2 SSOT 위임 + 독립 폴백 정렬)
+  async openDB() {
+    if (this.dbInstance) {
+      return this.dbInstance;
+    }
 
-      if (!window.indexedDB) {
+    if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.openDB === 'function') {
+      const db = await ZenStorage.openDB();
+      if (db) {
+        this.dbInstance = db;
+        return this.dbInstance;
+      }
+      if (typeof window === 'undefined' || !window.indexedDB) {
+        throw new Error('IndexedDB not supported');
+      }
+    }
+
+    return new Promise((resolve, reject) => {
+      if (typeof window === 'undefined' || !window.indexedDB) {
         console.warn('[IndexedDB] 브라우저가 IndexedDB를 지원하지 않습니다.');
         return reject(new Error('IndexedDB not supported'));
       }
@@ -89,22 +100,60 @@ const OfflineManager = {
 
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
+        const tx = event.target.transaction || request.transaction;
+
+        let studyStore;
         if (!db.objectStoreNames.contains(this.STORE_NAME)) {
           console.log(`[IndexedDB] 신규 스토어 '${this.STORE_NAME}' 생성`);
-          const store = db.createObjectStore(this.STORE_NAME, {
+          studyStore = db.createObjectStore(this.STORE_NAME, {
             keyPath: 'id',
             autoIncrement: true
           });
-          store.createIndex('docId', 'docId', { unique: false });
-          store.createIndex('timestamp', 'timestamp', { unique: false });
-          store.createIndex('readAt', 'readAt', { unique: false });
-          store.createIndex('reviewCount', 'reviewCount', { unique: false });
-          store.createIndex('synced', 'synced', { unique: false });
+        } else if (tx) {
+          studyStore = tx.objectStore(this.STORE_NAME);
+        }
+        if (studyStore) {
+          ['docId', 'timestamp', 'readAt', 'reviewCount', 'synced'].forEach((idx) => {
+            if (!studyStore.indexNames.contains(idx)) {
+              studyStore.createIndex(idx, idx, { unique: false });
+            }
+          });
+        }
+
+        let docStore;
+        if (!db.objectStoreNames.contains('documents')) {
+          docStore = db.createObjectStore('documents', {
+            keyPath: 'id'
+          });
+        } else if (tx) {
+          docStore = tx.objectStore('documents');
+        }
+        if (docStore) {
+          ['updatedAt', 'cachedAt'].forEach((idx) => {
+            if (!docStore.indexNames.contains(idx)) {
+              docStore.createIndex(idx, idx, { unique: false });
+            }
+          });
+        }
+
+        if (!db.objectStoreNames.contains('meta')) {
+          db.createObjectStore('meta', {
+            keyPath: 'key'
+          });
         }
       };
 
       request.onsuccess = (event) => {
         this.dbInstance = event.target.result;
+        this.dbInstance.onversionchange = () => {
+          if (this.dbInstance) {
+            this.dbInstance.close();
+            this.dbInstance = null;
+          }
+        };
+        this.dbInstance.onclose = () => {
+          this.dbInstance = null;
+        };
         resolve(this.dbInstance);
       };
 
@@ -293,3 +342,10 @@ const OfflineManager = {
     }
   }
 };
+
+if (typeof window !== 'undefined') {
+  window.OfflineManager = OfflineManager;
+}
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = OfflineManager;
+}

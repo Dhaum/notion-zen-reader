@@ -20,6 +20,16 @@ const App = {
     OfflineManager.init();
     this.initHistory();
     this.setupScrollCompression();
+    if (typeof window !== 'undefined' && window.addEventListener) {
+      window.addEventListener('online', () => {
+        if (this.currentView === 'list' && this.documents && this.documents.length > 0) {
+          this.renderDocumentList();
+        }
+      });
+      window.addEventListener('offline', () => {
+        this.refreshOfflineDocIds();
+      });
+    }
     this.refreshOfflineDocIds();
     this.loadDocuments();
   },
@@ -71,33 +81,62 @@ const App = {
     }, { passive: true });
   },
 
-  // 오프라인 저장된 본문 캐시 문서 ID Set 조회
-  async refreshOfflineDocIds() {
-    if (typeof caches === 'undefined') return;
-    try {
-      const cacheNames = await caches.keys();
-      const idSet = new Set();
-      for (const name of cacheNames) {
-        if (name.startsWith('zen-reader') || name.startsWith('zen-cache')) {
-          const cache = await caches.open(name);
-          const requests = await cache.keys();
-          for (const req of requests) {
-            const url = req.url || '';
-            const match = url.match(/\/api\/documents\/([a-zA-Z0-9_-]+)/);
-            if (match && match[1] && match[1] !== 'undefined') {
-              idSet.add(match[1]);
+  // 오프라인 저장된 본문 캐시 문서 ID Set 조회 (IndexedDB ZenStorage + Cache Storage 병합)
+  async refreshOfflineDocIds(skipRender = false) {
+    const idSet = new Set();
+
+    // 1) IndexedDB (ZenStorage v2 'documents' 스토어)에서 캐싱된 문서 ID 수집
+    if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.getCachedDocIds === 'function') {
+      try {
+        const idbIds = await ZenStorage.getCachedDocIds();
+        if (idbIds && typeof idbIds[Symbol.iterator] === 'function') {
+          for (const id of idbIds) {
+            if (id && id !== 'undefined') {
+              idSet.add(id);
             }
           }
         }
+      } catch (e) {
+        console.warn('[App] ZenStorage 캐시 ID 목록 조회 실패:', e);
       }
-      this.offlineDocIds = idSet;
-      // 이미 서재 화면이 렌더링된 상태라면 오프라인 배지 반영
-      if (this.currentView === 'list' && this.documents && this.documents.length > 0) {
-        this.renderDocumentList();
-      }
-    } catch (e) {
-      console.warn('[App] 오프라인 캐시 ID 목록 조회 실패:', e);
     }
+
+    // 2) Cache Storage ('zen-data-*', 'zen-reader*', 'zen-cache*')에서 캐싱된 API 응답 ID 병합
+    if (typeof caches !== 'undefined' && typeof caches.keys === 'function') {
+      try {
+        const cacheNames = await caches.keys();
+        for (const name of cacheNames) {
+          if (name.startsWith('zen-data-') || name.startsWith('zen-reader') || name.startsWith('zen-cache')) {
+            const cache = await caches.open(name);
+            const requests = await cache.keys();
+            for (const req of requests) {
+              const url = (typeof req === 'string' ? req : req.url) || '';
+              const match = url.match(/\/api\/documents\/([a-zA-Z0-9_-]+)/);
+              if (match && match[1] && match[1] !== 'undefined') {
+                idSet.add(match[1]);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[App] 오프라인 캐시 ID 목록 조회 실패:', e);
+      }
+    }
+
+    this.offlineDocIds = idSet;
+    if (Array.isArray(this.documents)) {
+      this.documents.forEach(doc => {
+        if (doc && doc.id) {
+          doc.isCachedLocally = idSet.has(doc.id);
+        }
+      });
+    }
+
+    // 이미 서재 화면이 렌더링된 상태라면 오프라인 배지 반영
+    if (!skipRender && this.currentView === 'list' && this.documents && this.documents.length > 0) {
+      this.renderDocumentList();
+    }
+    return this.offlineDocIds;
   },
 
   // 1. PIN 보안 인증 게이트
@@ -363,28 +402,48 @@ const App = {
 
   // 4. 노션 문서 목록 로딩 (새 글 반영용 forceRefresh 옵션, SWR 비파괴 캐시 렌더링 및 수정 변경 감지)
   async loadDocuments(forceRefresh = false) {
-    const listContainer = document.getElementById('doc-card-list');
+    const listContainer = (typeof document !== 'undefined' && document.getElementById)
+      ? document.getElementById('doc-card-list')
+      : null;
     const hasExistingData = Array.isArray(this.documents) && this.documents.length > 0;
 
-    // 1) 로컬스토리지 캐시 우선 복원 (0ms 즉시 렌더링)
+    // 1) 로컬스토리지 및 IndexedDB 캐시 우선 복원 (0ms 즉시 렌더링)
     if (!hasExistingData && !forceRefresh) {
+      let restoredDocs = null;
       try {
-        const cached = localStorage.getItem('zen_cached_documents');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            this.documents = parsed;
-            this.updateStatusPillCounts();
-            this.applyFilterAndSort();
+        if (typeof localStorage !== 'undefined') {
+          const cached = localStorage.getItem('zen_cached_documents');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              restoredDocs = parsed;
+            }
           }
         }
       } catch (e) {
         console.warn('[App] 로컬 캐시 파싱 실패:', e);
       }
+
+      if ((!restoredDocs || restoredDocs.length === 0) && typeof ZenStorage !== 'undefined' && typeof ZenStorage.getDocumentList === 'function') {
+        try {
+          const idbList = await ZenStorage.getDocumentList();
+          if (Array.isArray(idbList) && idbList.length > 0) {
+            restoredDocs = idbList;
+          }
+        } catch (e) {
+          console.warn('[App] ZenStorage 문서 목록 복원 실패:', e);
+        }
+      }
+
+      if (restoredDocs && restoredDocs.length > 0) {
+        this.documents = restoredDocs;
+        this.updateStatusPillCounts();
+        this.applyFilterAndSort();
+      }
     }
 
     // 2) 화면에 보여줄 데이터가 전혀 없을 때만 최초 1회 스피너 노출 (비파괴 렌더링)
-    if (!this.documents || this.documents.length === 0) {
+    if (listContainer && (!this.documents || this.documents.length === 0)) {
       listContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-muted);">지식 문서를 동기화하는 중입니다...</div>';
     }
 
@@ -392,63 +451,59 @@ const App = {
       const url = forceRefresh ? '/api/documents?refresh=true' : '/api/documents';
       const response = await fetch(url, {
         headers: {
-          'x-zen-pin': localStorage.getItem('zen_pin_code') || ''
+          'x-zen-pin': (typeof localStorage !== 'undefined' && localStorage.getItem('zen_pin_code')) || ''
         }
       });
       if (response.status === 401) {
         this.handleUnauthorized();
-        throw new Error('인증 실패: 올바른 PIN 번호가 필요합니다.');
+        const authErr = new Error('인증 실패: 올바른 PIN 번호가 필요합니다.');
+        authErr.isUnauthorized = true;
+        throw authErr;
+      }
+      if (response.ok === false) {
+        let errBody = {};
+        try { errBody = await response.json(); } catch (_) {}
+        throw new Error(errBody.error || errBody.message || `서버 응답 오류 (${response.status})`);
       }
       const data = await response.json();
-      if (!data.success || !data.documents) {
-        throw new Error(data.error || "문서 목록을 불러올 수 없습니다.");
+      if (!data || !data.success || !data.documents) {
+        throw new Error((data && (data.error || data.message)) || "문서 목록을 불러올 수 없습니다.");
       }
 
       this.documents = data.documents;
 
-      // 로컬스토리지에 최신 문서 목록 캐시 보존
+      // 로컬스토리지 및 IndexedDB(ZenStorage)에 최신 문서 목록 캐시 보존
       try {
-        localStorage.setItem('zen_cached_documents', JSON.stringify(data.documents));
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('zen_cached_documents', JSON.stringify(data.documents));
+        }
       } catch (e) {
         console.warn('[App] 문서 로컬 캐싱 실패:', e);
       }
-
-      // 4대 안전장치: 노션 수정 변경 감지 (로컬 캐시 타임스탬프와 노션 updatedAt 대조)
-      const syncMap = this.getDocSyncMap();
-      let updatedDocsCount = 0;
-      this.documents.forEach(doc => {
-        const localSync = syncMap[doc.id];
-        // 최초 방문 시 140개 뱃지 스팸 방지: 로컬에 기 열람/캐싱된 기록이 있는 문서만 수정 감지!
-        if (localSync && localSync.cachedUpdatedAt && doc.updatedAt) {
-          const remoteTime = new Date(doc.updatedAt).getTime();
-          const localTime = new Date(localSync.cachedUpdatedAt).getTime();
-          if (remoteTime > localTime) {
-            doc.hasUpdate = true;
-            updatedDocsCount++;
-          } else {
-            doc.hasUpdate = false;
-          }
-        } else {
-          doc.hasUpdate = false;
-        }
-      });
-
-      // 로컬 IndexedDB에 저장된 회독수와 최신 복습일자 결합
-      if (typeof ZenStorage !== 'undefined') {
+      if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.saveDocumentList === 'function') {
         try {
-          const statsMap = await ZenStorage.getDocStatsMap();
-          for (const doc of this.documents) {
-            if (statsMap[doc.id]) {
-              doc.reviewCount = statsMap[doc.id].reviewCount;
-              if (statsMap[doc.id].lastReviewedAt) {
-                doc.lastReviewedAt = statsMap[doc.id].lastReviewedAt;
-              }
-            }
-          }
+          await ZenStorage.saveDocumentList(data.documents);
         } catch (e) {
-          console.warn('[App] 로컬 통계 융합 실패:', e);
+          console.warn('[App] ZenStorage 문서 목록 저장 실패:', e);
         }
       }
+
+      // 4대 안전장치: 노션 수정 변경 감지 (ZenStorage.getAllCachedDocsMeta 우선, getDocSyncMap 폴백)
+      const updatedDocsCount = await this.detectDocumentUpdates(false);
+
+      // 원격 DB에서 삭제된 고아 문서 백그라운드 정리
+      if (data.documents.length > 0 && typeof ZenStorage !== 'undefined' && typeof ZenStorage.pruneOrphanDocuments === 'function') {
+        ZenStorage.pruneOrphanDocuments(data.documents.map(d => d.id))
+          .then((deletedCount) => {
+            if (deletedCount > 0) {
+              this.refreshOfflineDocIds(this.currentView !== 'list');
+            }
+          })
+          .catch(() => {});
+      }
+
+      // 로컬 IndexedDB에 저장된 회독수와 최신 복습일자 결합
+      await this.mergeLocalStats();
 
       this.updateStatusPillCounts();
       this.applyFilterAndSort();
@@ -460,12 +515,104 @@ const App = {
         }
       }
     } catch (err) {
-      listContainer.innerHTML = `
-        <div style="text-align: center; padding: 30px; color: var(--danger);">
-          <p>문서 목록 로딩 실패</p>
-          <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 6px;">${err.message}</p>
-        </div>
-      `;
+      // 비파괴 오프라인 방어: 이미 로컬 캐시/메모리 목록이 있으면 에러 화면으로 덮어쓰지 않음!
+      if (this.documents && this.documents.length > 0) {
+        await this.detectDocumentUpdates(true);
+        await this.mergeLocalStats(true);
+        this.updateStatusPillCounts();
+        this.applyFilterAndSort();
+        if (!err.isUnauthorized) {
+          this.showToast('📡 오프라인 모드: 저장된 서재 목록을 표시합니다.');
+        }
+        return;
+      }
+
+      if (listContainer) {
+        listContainer.innerHTML = `
+          <div style="text-align: center; padding: 30px; color: var(--danger);">
+            <p>문서 목록 로딩 실패</p>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 6px;">${this.escapeHtml(err.message)}</p>
+          </div>
+        `;
+      }
+    }
+  },
+
+  // 로컬 캐시(ZenStorage 우선, syncMap 폴백)와 비교해 수정 감지(hasUpdate) 및 오프라인 캐시 상태 동기화
+  async detectDocumentUpdates(preserveExistingIfUncached = false) {
+    if (!Array.isArray(this.documents) || this.documents.length === 0) return 0;
+
+    const cachedMetaMap = {};
+    if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.getAllCachedDocsMeta === 'function') {
+      try {
+        const metaList = await ZenStorage.getAllCachedDocsMeta();
+        if (Array.isArray(metaList)) {
+          metaList.forEach(m => {
+            if (m && m.id) cachedMetaMap[m.id] = m;
+          });
+        }
+      } catch (e) {
+        console.warn('[App] 캐시 메타 목록 조회 실패:', e);
+      }
+    }
+
+    await this.refreshOfflineDocIds(true);
+
+    const syncMap = this.getDocSyncMap();
+    let updatedDocsCount = 0;
+    this.documents.forEach(doc => {
+      const cachedMeta = cachedMetaMap[doc.id];
+      const localSync = syncMap[doc.id];
+      const localUpdatedAt = cachedMeta
+        ? (cachedMeta.updatedAt || (localSync && localSync.cachedUpdatedAt))
+        : (localSync && localSync.cachedUpdatedAt);
+
+      // 최초 방문 시 140개 뱃지 스팸 방지: 로컬에 기 열람/캐싱된 기록이 있는 문서만 수정 감지!
+      if (localUpdatedAt && doc.updatedAt) {
+        const remoteTime = new Date(doc.updatedAt).getTime();
+        const localTime = new Date(localUpdatedAt).getTime();
+        if (!isNaN(remoteTime) && !isNaN(localTime) && remoteTime > localTime) {
+          doc.hasUpdate = true;
+          updatedDocsCount++;
+        } else {
+          doc.hasUpdate = false;
+        }
+      } else {
+        doc.hasUpdate = preserveExistingIfUncached ? Boolean(doc.hasUpdate) : false;
+      }
+
+      if (cachedMeta) {
+        doc.isCachedLocally = true;
+        if (this.offlineDocIds && typeof this.offlineDocIds.add === 'function') {
+          this.offlineDocIds.add(doc.id);
+        }
+      } else {
+        doc.isCachedLocally = Boolean(this.offlineDocIds && this.offlineDocIds.has(doc.id));
+      }
+    });
+
+    return updatedDocsCount;
+  },
+
+  // 로컬 IndexedDB 회독수/최근복습일을 this.documents에 결합
+  async mergeLocalStats(preserveHigher = false) {
+    if (typeof ZenStorage === 'undefined' || typeof ZenStorage.getDocStatsMap !== 'function' || !Array.isArray(this.documents) || this.documents.length === 0) {
+      return;
+    }
+    try {
+      const statsMap = await ZenStorage.getDocStatsMap();
+      for (const doc of this.documents) {
+        if (statsMap && statsMap[doc.id]) {
+          doc.reviewCount = preserveHigher
+            ? Math.max(doc.reviewCount || 0, statsMap[doc.id].reviewCount || 0)
+            : statsMap[doc.id].reviewCount;
+          if (statsMap[doc.id].lastReviewedAt) {
+            doc.lastReviewedAt = statsMap[doc.id].lastReviewedAt;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[App] 로컬 통계 융합 실패:', e);
     }
   },
 
@@ -638,7 +785,10 @@ const App = {
   },
 
   renderDocumentList() {
-    const listContainer = document.getElementById('doc-card-list');
+    const listContainer = (typeof document !== 'undefined' && document.getElementById)
+      ? document.getElementById('doc-card-list')
+      : null;
+    if (!listContainer) return;
     if (this.filteredDocuments.length === 0) {
       listContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-muted);">조건에 맞는 문서가 없습니다.</div>';
       return;
@@ -661,6 +811,8 @@ const App = {
         </div>
       `;
     }
+
+    const isOffline = (typeof navigator !== 'undefined' && navigator.onLine === false);
 
     this.filteredDocuments.forEach(doc => {
       const lastDate = doc.lastReviewedAt ? new Date(doc.lastReviewedAt).toLocaleDateString() : '미학습';
@@ -706,12 +858,22 @@ const App = {
         : '';
       const updateClass = doc.hasUpdate ? 'card-has-update' : '';
 
+      // 오프라인 시 미저장 문서 구분 표시 (온라인 시 v17 카드 레이아웃 100% 유지)
+      const isCachedOffline = Boolean(
+        this.offlineDocIds && typeof this.offlineDocIds.has === 'function' && this.offlineDocIds.has(doc.id)
+      );
+      const isOfflineUnavailable = isOffline && !isCachedOffline;
+      const offlineClass = isOfflineUnavailable ? 'card-offline-unavailable' : '';
+      const uncachedBadge = isOfflineUnavailable
+        ? `<span class="badge-doc-uncached" title="오프라인 저장되지 않은 문서입니다">☁️ 미저장</span>`
+        : '';
+
       html += `
-        <div class="doc-card ${cardStatusClass} ${updateClass}" onclick="Reader.open('${doc.id}')">
+        <div class="doc-card ${cardStatusClass} ${updateClass}${offlineClass ? ' ' + offlineClass : ''}" onclick="Reader.open('${doc.id}')">
           <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px;">
             <div class="doc-card-title" style="margin-bottom: 0; flex: 1 1 auto; min-width: 0; word-break: keep-all; overflow-wrap: break-word;">
               ${this.escapeHtml(doc.title)}
-              ${updatedBadge}
+              ${updatedBadge}${uncachedBadge ? '\n              ' + uncachedBadge : ''}
             </div>
             <div class="doc-card-badges">
               ${reviewBadge}
@@ -736,7 +898,7 @@ const App = {
 
   // 4-1. 노션에서 수정 감지된 문서들만 정밀 일괄 최신화 (300ms Pacing + 429 원천 차단)
   async updateModifiedDocs() {
-    if (!navigator.onLine) {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       this.showToast('⚠️ 오프라인 상태에서는 일괄 최신화를 진행할 수 없습니다.');
       return;
     }
@@ -759,15 +921,25 @@ const App = {
       try {
         const res = await fetch(`/api/documents/${doc.id}?refresh=true`, {
           headers: {
-            'x-zen-pin': localStorage.getItem('zen_pin_code') || ''
+            'x-zen-pin': (typeof localStorage !== 'undefined' && localStorage.getItem('zen_pin_code')) || ''
           }
         });
-        if (res.ok) {
+        if (res && res.ok !== false) {
           const data = await res.json();
-          if (data && data.document) {
+          if (data && data.success !== false && data.document) {
+            if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.saveDocument === 'function') {
+              await ZenStorage.saveDocument(data.document);
+            }
+            if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.prefetchDocumentImages === 'function') {
+              ZenStorage.prefetchDocumentImages(data.document, 3).catch(() => {});
+            }
             this.setDocSyncMap(doc.id, data.document.updatedAt || doc.updatedAt);
             doc.hasUpdate = false;
+            doc.isCachedLocally = true;
+            if (data.document.updatedAt) doc.updatedAt = data.document.updatedAt;
             successCount++;
+          } else {
+            failCount++;
           }
         } else {
           failCount++;
@@ -786,6 +958,7 @@ const App = {
       }
     }
 
+    await this.refreshOfflineDocIds(true);
     // 변경된 뱃지 및 배너 즉시 반영
     this.applyFilterAndSort();
 
@@ -949,37 +1122,84 @@ const App = {
     this.filterByTag(tag);
   },
 
-  // 140개 전 문서 오프라인 일괄 사전 캐싱 (350ms Pacing + 429 지수 백오프 재시도 + 세련된 진행률)
-  async downloadAllForOffline() {
-    if (!navigator.onLine) {
+  // 140개 전 문서 오프라인 증분/전체 사전 캐싱 (350ms Pacing + 429 지수 백오프 재시도 + WakeLock + Delta Sync)
+  async downloadAllForOffline(forceAll = false) {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       this.showToast('⚠️ 오프라인 상태에서는 일괄 다운로드를 할 수 없습니다.');
       return;
     }
 
-    if (this.documents.length === 0) {
+    if (!this.documents || this.documents.length === 0) {
       this.showToast('문서 목록을 먼저 불러와주세요.');
       return;
     }
 
-    if (!confirm(`현재 서재에 있는 ${this.documents.length}개 전체 문서를 태블릿 오프라인 저장소에 다운로드할까요?\n\n(완료 시 인터넷이 전혀 없는 야외나 비행기에서도 모든 문서를 읽을 수 있습니다)`)) {
+    // 증분 동기화(Delta Sync): 미저장, 블록 누락, 또는 노션 수정 감지 문서만 필터링
+    let targetDocs = [...this.documents];
+    if (!forceAll && typeof ZenStorage !== 'undefined' && typeof ZenStorage.getAllCachedDocsMeta === 'function') {
+      try {
+        const cachedMetaList = await ZenStorage.getAllCachedDocsMeta();
+        const cachedMap = {};
+        if (Array.isArray(cachedMetaList)) {
+          cachedMetaList.forEach(m => {
+            if (m && m.id) cachedMap[m.id] = m;
+          });
+        }
+        targetDocs = this.documents.filter(doc => {
+          const cached = cachedMap[doc.id];
+          if (!cached) return true;
+          const missingBlocks = cached.hasBlocks === false ||
+            (typeof cached.blockCount === 'number' && cached.blockCount <= 0) ||
+            (Array.isArray(cached.blocks) && cached.blocks.length === 0);
+          if (missingBlocks) return true;
+          if (doc.updatedAt && cached.updatedAt) {
+            const remoteTime = new Date(doc.updatedAt).getTime();
+            const localTime = new Date(cached.updatedAt).getTime();
+            if (!isNaN(remoteTime) && !isNaN(localTime) && remoteTime > localTime) {
+              return true;
+            }
+          }
+          return false;
+        });
+      } catch (e) {
+        console.warn('[App] 증분 동기화 메타 조회 실패, 전체 대상으로 전환:', e);
+        targetDocs = [...this.documents];
+      }
+    }
+
+    if (!forceAll && targetDocs.length === 0) {
+      this.showToast('✨ 모든 문서가 이미 최신 상태로 오프라인 저장되어 있습니다!');
       return;
     }
 
-    const total = this.documents.length;
-    this.showToast(`📦 오프라인 캐싱 시작 (총 ${total}개)...`);
+    if (typeof confirm === 'function') {
+      const skippedCount = this.documents.length - targetDocs.length;
+      const confirmMsg = forceAll
+        ? `전체 ${targetDocs.length}개 문서를 태블릿 오프라인 저장소에 다시 다운로드할까요?\n\n(완료 시 인터넷이 전혀 없는 야외나 비행기에서도 모든 문서를 읽을 수 있습니다)`
+        : (skippedCount > 0
+          ? `미저장·수정된 ${targetDocs.length}개 문서를 오프라인 저장소에 증분 다운로드할까요?\n(전체 ${this.documents.length}개 중 이미 최신 저장된 ${skippedCount}개는 건너뜁니다)`
+          : `미저장·수정된 ${targetDocs.length}개 문서를 태블릿 오프라인 저장소에 다운로드할까요?\n\n(완료 시 인터넷이 전혀 없는 야외나 비행기에서도 모든 문서를 읽을 수 있습니다)`);
+      if (!confirm(confirmMsg)) {
+        return;
+      }
+    }
+
+    const total = targetDocs.length;
+    this.showToast(`📦 오프라인 캐싱 시작 (대상 ${total}개)...`);
     let successCount = 0;
     let failCount = 0;
 
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
     // 429 Too Many Requests 대응: 1.5초 대기 후 최대 2회 지수 백오프 재시도
-    const fetchDocWithRetry = async (docId, maxRetries = 2) => {
+    const fetchDocWithRetry = async (doc, maxRetries = 2) => {
       let attempt = 0;
+      const reqUrl = `/api/documents/${doc.id}${(forceAll || doc.hasUpdate) ? '?refresh=true' : ''}`;
       while (attempt <= maxRetries) {
         try {
-          const res = await fetch(`/api/documents/${docId}`, {
+          const res = await fetch(reqUrl, {
             headers: {
-              'x-zen-pin': localStorage.getItem('zen_pin_code') || ''
+              'x-zen-pin': (typeof localStorage !== 'undefined' && localStorage.getItem('zen_pin_code')) || ''
             }
           });
           if (res.status === 429) {
@@ -991,7 +1211,7 @@ const App = {
               continue;
             }
           }
-          if (!res.ok && res.status >= 500 && attempt < maxRetries) {
+          if (res.ok === false && res.status >= 500 && attempt < maxRetries) {
             const backoffMs = 1500 * Math.pow(2, attempt);
             console.warn(`[ZenReader] 서버 일시 오류(${res.status}) - ${backoffMs}ms 대기 후 재시도 (${attempt + 1}/${maxRetries})...`);
             await sleep(backoffMs);
@@ -1012,80 +1232,128 @@ const App = {
       }
     };
 
-    for (let i = 0; i < total; i++) {
-      const doc = this.documents[i];
+    let wakeLockSentinel = null;
+    if (typeof navigator !== 'undefined' && navigator.wakeLock && typeof navigator.wakeLock.request === 'function') {
       try {
-        const docRes = await fetchDocWithRetry(doc.id, 2);
-        if (docRes && docRes.ok) {
-          const docData = await docRes.json();
-
-          // 문서 내 포함된 약물 구조식/도해 이미지까지 zen-images-v1 영구 캐시에 프리패치
-          if (docData && docData.document && docData.document.blocks) {
-            const images = [];
-            const extractImages = (blocks) => {
-              for (const b of blocks) {
-                if (b.type === 'image' && b.imageUrl) images.push(b.imageUrl);
-                if (b.children) extractImages(b.children);
-              }
-            };
-            extractImages(docData.document.blocks);
-
-            // 이미지 병렬 프리패치 (서비스 워커 zen-images-v1 자동 인터셉트)
-            if (images.length > 0) {
-              await Promise.allSettled(
-                images.map(imgUrl => fetch(imgUrl, { mode: 'no-cors' }).catch(() => {}))
-              );
-            }
-          }
-          // 로컬 동기화 맵에 캐싱 시점의 updatedAt 기록
-          this.setDocSyncMap(doc.id, (docData.document && docData.document.updatedAt) || doc.updatedAt);
-          doc.hasUpdate = false;
-          successCount++;
-        } else {
-          failCount++;
-        }
-      } catch (err) {
-        console.warn('다운로드 실패:', doc.title, err);
-        failCount++;
-      }
-
-      // 세련된 진행률 표시: 📦 오프라인 캐싱 중... 45/140 (32%)
-      const current = i + 1;
-      const pct = Math.round((current / total) * 100);
-      this.showToast(`📦 오프라인 캐싱 중... ${current}/${total} (${pct}%)`);
-
-      // 140개 연속 호출 시 문서 간 350ms 페이싱(Pacing) 딜레이 주입 (마지막 문서 직후에는 생략)
-      if (i < total - 1) {
-        await sleep(350);
+        wakeLockSentinel = await navigator.wakeLock.request('screen');
+      } catch (e) {
+        console.warn('[App] 화면 WakeLock 획득 생략:', e);
       }
     }
 
+    try {
+      for (let i = 0; i < total; i++) {
+        const doc = targetDocs[i];
+        try {
+          const docRes = await fetchDocWithRetry(doc, 2);
+          if (docRes && docRes.ok !== false) {
+            const docData = await docRes.json();
+
+            if (docData && docData.success !== false && docData.document) {
+              if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.saveDocument === 'function') {
+                await ZenStorage.saveDocument(docData.document);
+              }
+
+              // 문서 내 포함된 약물 구조식/도해 이미지까지 zen-images-v1 영구 캐시에 프리패치
+              if (typeof ZenStorage !== 'undefined' && typeof ZenStorage.prefetchDocumentImages === 'function') {
+                await ZenStorage.prefetchDocumentImages(docData.document, 3).catch(() => {});
+              } else if (docData.document.blocks) {
+                const images = [];
+                const extractImages = (blocks) => {
+                  for (const b of blocks) {
+                    if (b.type === 'image' && b.imageUrl) images.push(b.imageUrl);
+                    if (b.children) extractImages(b.children);
+                  }
+                };
+                extractImages(docData.document.blocks);
+
+                // 이미지 병렬 프리패치 (서비스 워커 zen-images-v1 자동 인터셉트)
+                if (images.length > 0 && typeof fetch === 'function') {
+                  await Promise.allSettled(
+                    images.map(imgUrl => fetch(imgUrl, { mode: 'no-cors' }).catch(() => {}))
+                  );
+                }
+              }
+
+              // 로컬 동기화 맵에 캐싱 시점의 updatedAt 기록
+              this.setDocSyncMap(doc.id, docData.document.updatedAt || doc.updatedAt);
+              doc.hasUpdate = false;
+              doc.isCachedLocally = true;
+              if (docData.document.updatedAt) doc.updatedAt = docData.document.updatedAt;
+              successCount++;
+            } else {
+              failCount++;
+            }
+          } else {
+            failCount++;
+          }
+        } catch (err) {
+          console.warn('다운로드 실패:', doc.title, err);
+          failCount++;
+        }
+
+        // 세련된 진행률 표시: 📦 오프라인 캐싱 중... 45/140 (32%)
+        const current = i + 1;
+        const pct = Math.round((current / total) * 100);
+        this.showToast(`📦 오프라인 캐싱 중... ${current}/${total} (${pct}%)`);
+
+        // 연속 호출 시 문서 간 350ms 페이싱(Pacing) 딜레이 주입 (마지막 문서 직후에는 생략)
+        if (i < total - 1) {
+          await sleep(350);
+        }
+      }
+    } finally {
+      if (wakeLockSentinel && typeof wakeLockSentinel.release === 'function') {
+        try {
+          await wakeLockSentinel.release();
+        } catch (e) {}
+      }
+    }
+
+    await this.refreshOfflineDocIds();
+    if (this.currentView === 'settings' && typeof Settings !== 'undefined' && typeof Settings.load === 'function') {
+      Settings.load();
+    }
+
     if (failCount === 0) {
-      await this.refreshOfflineDocIds();
       this.showToast(`🎉 총 ${successCount}개 문서 오프라인 저장 완료! 이제 인터넷 없이도 모든 문서를 읽을 수 있습니다.`);
     } else {
-      await this.refreshOfflineDocIds();
       this.showToast(`⚠️ 오프라인 캐싱 완료: 성공 ${successCount}개 / 실패 ${failCount}개 (인터넷 없이 열람 가능)`);
     }
   },
 
   // 6. 플로팅 토스트 알림
   showToast(message) {
+    if (typeof document === 'undefined' || !document.getElementById) return;
     let toast = document.getElementById('zen-toast');
+    const listContainer = document.getElementById('doc-card-list');
+    if (toast && listContainer && toast === listContainer) {
+      return;
+    }
     if (!toast) {
+      if (typeof document.createElement !== 'function' || !document.body || typeof document.body.appendChild !== 'function') {
+        return;
+      }
       toast = document.createElement('div');
       toast.id = 'zen-toast';
       toast.className = 'zen-toast';
       document.body.appendChild(toast);
     }
     toast.innerHTML = message;
-    toast.classList.add('show');
+    if (toast.classList && typeof toast.classList.add === 'function') {
+      toast.classList.add('show');
+    }
     if (this._toastTimer) {
       clearTimeout(this._toastTimer);
     }
     this._toastTimer = setTimeout(() => {
-      toast.classList.remove('show');
+      if (toast.classList && typeof toast.classList.remove === 'function') {
+        toast.classList.remove('show');
+      }
     }, 3200);
+    if (this._toastTimer && typeof this._toastTimer.unref === 'function') {
+      this._toastTimer.unref();
+    }
   },
 
   escapeHtml(str) {

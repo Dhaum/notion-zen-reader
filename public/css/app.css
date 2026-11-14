@@ -172,6 +172,30 @@ body {
   transform: scale(0.97);
 }
 
+.btn:disabled,
+.btn[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  border-radius: 6px;
+}
+
+.btn-secondary {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--bg-card-hover);
+  border-color: var(--accent);
+}
+
 .btn-primary {
   background-color: var(--accent);
   border-color: var(--accent);
@@ -2268,4 +2292,186 @@ body.theme-sepia .notion-color-red { color: #b91c1c; }
 
 .zen-toc-dot:hover .zen-toc-tooltip {
   display: block;
+}
+
+/* ==========================================================================
+   [v18 오프라인 본문 캐시 UI · 리더 캐시 배너 · 설정 캐시 관리]
+   ========================================================================== */
+
+/* 서재 목록: 오프라인 상태에서 미저장(열람 불가) 문서 카드 */
+.doc-card.card-offline-unavailable {
+  opacity: 0.62;
+  border-style: dashed;
+  background-color: var(--bg-secondary);
+}
+
+.doc-card.card-offline-unavailable:hover {
+  opacity: 0.82;
+}
+
+.badge-doc-uncached {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background-color: var(--bg-secondary);
+  color: var(--text-muted);
+  border: 1px dashed var(--border-color);
+  font-size: 0.72rem;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 2px 7px;
+  margin-left: 6px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+body.theme-light .badge-doc-uncached {
+  border-color: rgba(100, 116, 139, 0.32);
+}
+
+/* 리더 헤더 인라인 캐시 상태 배너 */
+.reader-cache-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.45;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.reader-cache-banner .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.reader-cache-banner.banner-offline {
+  background-color: var(--accent-subtle);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.reader-cache-banner.banner-outdated {
+  background-color: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.42);
+  color: #fbbf24;
+}
+
+body.theme-light .reader-cache-banner.banner-outdated,
+body.theme-sepia .reader-cache-banner.banner-outdated,
+body.theme-green .reader-cache-banner.banner-outdated {
+  background-color: rgba(245, 158, 11, 0.16);
+  border-color: rgba(180, 83, 9, 0.38);
+  color: #92400e;
+}
+
+.reader-cache-banner.banner-outdated .btn {
+  background-color: var(--bg-card);
+  border-color: rgba(245, 158, 11, 0.45);
+  color: var(--text-primary);
+}
+
+.reader-cache-banner.banner-outdated .btn:hover {
+  border-color: var(--warning);
+  background-color: var(--bg-card-hover);
+}
+
+/* 설정 탭: Persistent Lock 대기 배지 & 오프라인 문서 캐시 관리 */
+.lock-status-badge.lock-status-pending {
+  background: rgba(245, 158, 11, 0.16);
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+body.theme-light .lock-status-badge.lock-status-pending,
+body.theme-sepia .lock-status-badge.lock-status-pending,
+body.theme-green .lock-status-badge.lock-status-pending {
+  color: #b45309;
+}
+
+.cache-summary-text {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.cache-orphan-warn {
+  color: var(--warning);
+  font-weight: 700;
+}
+
+body.theme-light .cache-orphan-warn,
+body.theme-sepia .cache-orphan-warn,
+body.theme-green .cache-orphan-warn {
+  color: #b45309;
+}
+
+.cache-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.cache-stat-pill {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cache-stat-pill .cache-stat-label {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.cache-stat-pill .cache-stat-value {
+  font-size: 0.94rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.cache-stat-pill.pill-accent {
+  border-color: var(--accent);
+  background-color: var(--accent-subtle);
+}
+
+.cache-stat-pill.pill-warn {
+  border-color: rgba(245, 158, 11, 0.45);
+  background-color: rgba(245, 158, 11, 0.1);
+}
+
+.cache-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cache-actions-row .btn {
+  flex: 1 1 calc(50% - 8px);
+  min-width: 190px;
+  justify-content: center;
+  min-height: 40px;
+}
+
+@media (max-width: 520px) {
+  .cache-actions-row .btn {
+    flex: 1 1 100%;
+  }
 }
