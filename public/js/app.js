@@ -330,6 +330,37 @@ const App = {
     }
   },
 
+  openLastReadDoc() {
+    if (typeof Reader === 'undefined' || typeof Reader.open !== 'function') return;
+
+    let targetId = null;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        targetId = localStorage.getItem('zen_last_read_doc_id');
+      }
+    } catch (e) {}
+
+    const list = Array.isArray(this.documents) ? this.documents : [];
+    const matched = targetId ? list.find(d => d.id === targetId) : null;
+
+    if (matched) {
+      Reader.open(matched.id);
+      return;
+    }
+
+    const fallbackList = (Array.isArray(this.filteredDocuments) && this.filteredDocuments.length > 0)
+      ? this.filteredDocuments
+      : list;
+    const fallbackDoc = fallbackList.find(d => d.status !== '완료') || fallbackList[0];
+
+    if (fallbackDoc && fallbackDoc.id) {
+      this.showToast('최근 기록이 없어 우선 학습 문서를 엽니다.');
+      Reader.open(fallbackDoc.id);
+    } else {
+      this.showToast('열람할 문서가 아직 없습니다.');
+    }
+  },
+
   // 3. PWA 서비스워커 등록 및 설치 프롬프트 제어
   initPWA() {
     if ('serviceWorker' in navigator) {
@@ -1000,11 +1031,8 @@ const App = {
 
       html += `
         <div class="doc-card ${cardStatusClass} ${updateClass}${offlineClass ? ' ' + offlineClass : ''}" onclick="Reader.open('${doc.id}')">
-          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 4px;">
-            <div class="doc-card-title" style="margin-bottom: 0; flex: 1 1 auto; min-width: 0; word-break: keep-all; overflow-wrap: break-word;">
-              ${this.escapeHtml(doc.title)}
-              ${updatedBadge}${uncachedBadge ? '\n              ' + uncachedBadge : ''}
-            </div>
+          <div class="doc-card-header-row">
+            <div class="doc-card-title" title="${this.escapeHtml(doc.title)}">${this.escapeHtml(doc.title)}</div>
             <div class="doc-card-badges">
               ${reviewBadge}
               <span class="card-status-badge ${statusBadgeClass}" style="white-space: nowrap !important; line-height: 1.2 !important;">${this.escapeHtml(s)}</span>
@@ -1012,6 +1040,7 @@ const App = {
           </div>
           <div class="doc-card-meta">
             ${dateBadgeHtml}
+            ${updatedBadge}${uncachedBadge}
             ${(doc.tags || []).slice(0, 10).map(t => {
               const activeQuery = (this.searchQuery || '').trim().replace(/^#/, '').toLowerCase();
               const isMatch = activeQuery && t.toLowerCase() === activeQuery;

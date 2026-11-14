@@ -16,7 +16,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon.png">
 
-  <link rel="stylesheet" href="/css/app.css?v=20261115_v20">
+  <link rel="stylesheet" href="/css/app.css?v=20261115_v21">
 </head>
 <body class="theme-dark font-md">
 
@@ -41,8 +41,8 @@
       <button id="header-offline-btn" class="btn btn-icon" onclick="App.downloadAllForOffline()" title="미저장·수정 문서 오프라인 저장" aria-label="오프라인 일괄 저장">
         <svg class="zen-svg icon-spin-target" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
       </button>
-      <button class="btn btn-icon" onclick="App.cycleFontSize()" title="글자 크기 변경" aria-label="글자 크기 변경">
-        <span class="btn-icon-text">가</span>
+      <button id="header-resume-btn" class="btn btn-icon" onclick="App.openLastReadDoc()" title="최근 학습 이어 읽기" aria-label="최근 학습 이어 읽기">
+        <svg class="zen-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
       </button>
       <button class="btn btn-icon" onclick="App.toggleTheme()" title="화면 테마 변경" aria-label="화면 테마 변경">
         <svg class="zen-svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" fill-opacity="0.22"/></svg>
@@ -86,9 +86,9 @@
         </button>
       </div>
       
-      <!-- 상태 필터 & 생성 시각 정렬 컨트롤 -->
+      <!-- 상태 필터 & 오프라인·정렬 컨트롤 (단일 행 좌우 분리) -->
       <div class="filter-controls-row">
-        <!-- 상태 필터 (전체 / 완료 / 진행 중 / 시작 전) -->
+        <!-- 상태 필터 (전체 / 완료 / 진행중 / 시작전) -->
         <div class="status-filter-pills">
           <button class="status-pill active" data-status="all" onclick="App.setStatusFilter('all')">
             전체 <span id="count-all" class="pill-count">0</span>
@@ -97,25 +97,25 @@
             <span class="status-dot dot-done" aria-hidden="true"></span>완료 <span id="count-done" class="pill-count">0</span>
           </button>
           <button class="status-pill" data-status="진행 중" onclick="App.setStatusFilter('진행 중')">
-            <span class="status-dot dot-progress" aria-hidden="true"></span>진행 중 <span id="count-progress" class="pill-count">0</span>
+            <span class="status-dot dot-progress" aria-hidden="true"></span>진행중 <span id="count-progress" class="pill-count">0</span>
           </button>
           <button class="status-pill" data-status="시작 전" onclick="App.setStatusFilter('시작 전')">
-            <span class="status-dot dot-todo" aria-hidden="true"></span>시작 전 <span id="count-todo" class="pill-count">0</span>
+            <span class="status-dot dot-todo" aria-hidden="true"></span>시작전 <span id="count-todo" class="pill-count">0</span>
           </button>
         </div>
 
         <!-- 정렬 선택 & 오프라인 전용 필터 -->
         <div class="sort-control-box">
           <button id="btn-offline-only-filter" class="offline-filter-pill" onclick="App.toggleOfflineOnlyFilter()" title="오프라인 열람 가능 문서만 모아보기">
-            <svg class="zen-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <svg class="zen-svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             <span>오프라인만</span>
             <span id="count-offline" class="pill-count">0</span>
           </button>
-          <select id="sort-select" class="sort-select" onchange="App.setSortOrder(this.value)">
-            <option value="created_desc" selected>생성일 최신순</option>
-            <option value="created_asc">생성일 과거순</option>
-            <option value="updated_desc">최근 수정순</option>
-            <option value="title_asc">가나다순 (제목)</option>
+          <select id="sort-select" class="sort-select" onchange="App.setSortOrder(this.value)" aria-label="보기 기준 정렬">
+            <option value="created_desc" selected>최신순</option>
+            <option value="created_asc">과거순</option>
+            <option value="updated_desc">수정순</option>
+            <option value="title_asc">제목순</option>
           </select>
         </div>
       </div>
@@ -223,11 +223,11 @@
   </div>
 
   <!-- 스크립트 로딩 -->
-  <script src="/js/storage-idb.js?v=20261115_v20"></script>
-  <script src="/js/offline.js?v=20261115_v20"></script>
-  <script src="/js/reader.js?v=20261115_v20"></script>
-  <script src="/js/dashboard.js?v=20261115_v20"></script>
-  <script src="/js/settings.js?v=20261115_v20"></script>
-  <script src="/js/app.js?v=20261115_v20"></script>
+  <script src="/js/storage-idb.js?v=20261115_v21"></script>
+  <script src="/js/offline.js?v=20261115_v21"></script>
+  <script src="/js/reader.js?v=20261115_v21"></script>
+  <script src="/js/dashboard.js?v=20261115_v21"></script>
+  <script src="/js/settings.js?v=20261115_v21"></script>
+  <script src="/js/app.js?v=20261115_v21"></script>
 </body>
 </html>

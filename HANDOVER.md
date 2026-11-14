@@ -5,7 +5,13 @@
 ---
 
 ## 1. 📌 다음 작업 재개 포인트 (Next Action)
-- **최우선 과제**: **v20 Unslop 디자인 개선·컴팩트 서재·버튼 로딩/터치 피드백 + v19 신규 UX 기능 커밋/배포 및 실기기 검증**
+- **최우선 과제**: **v21 실기기 피드백 5종(서재 뱃지 경계 정렬·좌우 1행 필터·우상단 이어읽기·카드 여백 개선·와이드 그리드) 커밋/배포 및 최종 검증**
+- **완료된 작업 (2026-11-15 v21 — 실기기 UI 피드백 5종 반영)**:
+  1. **불필요한 여백 활용 & 와이드 그리드 (`public/css/app.css`)**: `.container` 상한을 `960px`로 확장하고 `@media (min-width: 740px)`에서 서재 카드를 2열 그리드로 배치, 본문 `.reader-container`는 `740px` 최적 독서 폭 중앙 정렬 유지.
+  2. **필터 행 단일 행 좌우 정렬 (`public/index.html`, `public/css/app.css`)**: 좌측 `[전체·완료·진행중·시작전]`과 우측 `[오프라인만·최신순/과거순/수정순/제목순]`을 `flex-wrap: nowrap` 단일 행으로 고정하고, `app.css` 내 잔존하던 깨진 CSS 중괄호를 제거.
+  3. **우상단 글자크기 버튼 대체 (`public/index.html`, `public/js/app.js`, `public/js/reader.js`)**: 실사용 빈도가 낮은 `[가]` 버튼을 제거하고 마지막 열람 문서로 1탭 복귀하는 `최근 학습 이어 읽기(#header-resume-btn, App.openLastReadDoc)` 북마크 버튼으로 교체(`zen_last_read_doc_id` 연동; 글자 크기는 설정 탭 유지).
+  4. **서재 카드 구획 호흡 개선 (`public/css/app.css`, `public/js/app.js`)**: `.doc-card` 패딩(`13px 14px 12px 17px`), 카드 간격(`9px`), 헤더 행(`.doc-card-header-row` `margin-bottom: 7px`) 및 태그 여백을 정돈해 답답함 해소.
+  5. **긴 제목-우측 뱃지 경계 통일 & 2행 제한 (`public/css/app.css`, `public/js/app.js`)**: `.doc-card-badges`에 `min-width: 96px; justify-content: flex-end;` 슬롯 너비를 고정하고, `.doc-card-title`은 `-webkit-line-clamp: 2`로 최대 2행까지만 표시(`수정됨`·`미저장` 뱃지는 하단 메타 행으로 분리해 잘림 방지).
 - **완료된 작업 (2026-11-15 v20 — Unslop UI/UX 디자인·인터랙션 고도화)**:
   1. **Editorial Clinical Notebook 디자인 언슬롭 (`index.html`, `app.css`, `app.js`, `reader.js`, `settings.js`, `dashboard.js`)**: 네온 `box-shadow` 글로우, 무한 펄스 뱃지, 그라데이션 배너, 비인디고 테마로 새어 나오던 `#6366f1` 및 대시보드 다크 `rgba(30,41,59,0.4)` 하드코딩을 제거하고 4대 테마 토큰 정합성 확보. 과장·느낌표 위주 카피를 차분한 임상 노트 어조로 정돈.
   2. **이모지 정리 및 SVG·시맨틱 도트 교체 (`index.html`, `app.js`, `reader.js`, `settings.js`, `dashboard.js`)**: 헤더·네비게이션 탭·검색바·상태/체감도 필터·플로팅 독·팝오버·설정·대시보드·PIN 모달의 장식용 이모지를 1.75–2px 모노크롬 SVG(`.zen-svg`)와 시맨틱 컬러 도트(`.status-dot`, `.fb-dot`)로 교체.
@@ -23,8 +29,8 @@
   4. **설정 탭 오프라인 캐시 관리 & 버그 수정 (`public/js/settings.js`, `public/css/app.css`, `public/index.html`)**: Panel #3 영구 보존 락(`isPersisted`) 하드코딩 버그 수정, Panel #4 오프라인 문서 캐시 요약·증분 저장·전체 재다운로드·고아 정리(`pruneOrphans`)·학습기록 보존 초기화(`clearDocCacheOnly`) 구현, 4대 테마 호환 CSS 및 에셋 `?v=20261115_v20` 갱신.
   5. **Notion 하위 블록 수집 최적화 (`api/lib/notion.js`)**: `fetchBlocksRecursively`에 블록 순서 보존 + `createConcurrencyLimiter(3)` 적용으로 대용량 문서 타임아웃 방어.
 - **이전 완료 (2026-11-08 v17)**: 스마트 날짜 전환(1안), 상단 회독수 고정, 시안 A 상태 인디케이터 바, History API/스와이프 뒤로가기, 상단 크롬 스크롤 압축, 태그 바텀시트, 마이크로 목차 레일(TOC Scrubber).
-- **테스트 현황**: `test-cache-return.js`(Tests 1..19, 20개 케이스), `test-sw-cache-matching.js`, `test-sw-image.js`, `test-change-detection.js`, `test-auth.js` 및 전 JS 파일 `node -c` 구문 검사 100% 통과.
-- **에셋/서비스워커 버전**: `v20` (`zen-reader-v20`, `zen-data-v1`, `?v=20261115_v20`).
+- **테스트 현황**: `test-cache-return.js`(Tests 1..20, 21개 케이스), `test-sw-cache-matching.js`, `test-sw-image.js`, `test-change-detection.js`, `test-auth.js` 및 전 JS 파일 `node -c` 구문 검사 100% 통과.
+- **에셋/서비스워커 버전**: `v21` (`zen-reader-v21`, `zen-data-v1`, `?v=20261115_v21`).
 
 ---
 

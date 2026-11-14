@@ -254,7 +254,7 @@ Reader.executeCheckin('good').then(() => {
     console.log('✅ [Test 8 PASS] Reader.goBack 히스토리 라우팅 및 TOC 헤딩 수집 검증 완료');
 
     await runV18Tests();
-    console.log('\n🎉 ALL 19 TESTS PASSED! v20 unslop UI·피드백·새로고침 락·오프라인 필터 전체 무결성 검증 완료.');
+    console.log('\n🎉 ALL 20 TESTS PASSED! v21 서재 뱃지 경계 정렬·1행 필터·이어읽기·여백 개선 전체 검증 완료.');
   });
 }).catch(err => {
   console.error('❌ 테스트 실패:', err);
@@ -963,7 +963,7 @@ async function runV18Tests() {
     const cssSrc = fs.readFileSync(path.join(__dirname, '../public/css/app.css'), 'utf-8');
     const notionSrc = fs.readFileSync(path.join(__dirname, '../api/lib/notion.js'), 'utf-8');
 
-    assert.ok(swSrc.includes("const CACHE_NAME = 'zen-reader-v20'"), 'sw.js CACHE_NAME이 zen-reader-v20이어야 합니다.');
+    assert.ok(swSrc.includes("const CACHE_NAME = 'zen-reader-v21'"), 'sw.js CACHE_NAME이 zen-reader-v21이어야 합니다.');
     assert.ok(swSrc.includes("const DATA_CACHE_NAME = 'zen-data-v1'"), 'sw.js DATA_CACHE_NAME이 zen-data-v1이어야 합니다.');
     assert.ok(
       swSrc.includes('PRESERVED_CACHES = [CACHE_NAME, DATA_CACHE_NAME, IMAGE_CACHE_NAME]'),
@@ -984,9 +984,11 @@ async function runV18Tests() {
     assert.strictEqual(htmlSrc.includes('v20261108_v17'), false, 'index.html에 구버전 v17 쿼리스트링이 남아있으면 안 됩니다.');
     assert.strictEqual(htmlSrc.includes('v20261115_v18'), false, 'index.html에 구버전 v18 쿼리스트링이 남아있으면 안 됩니다.');
     assert.strictEqual(htmlSrc.includes('v20261115_v19'), false, 'index.html에 구버전 v19 쿼리스트링이 남아있으면 안 됩니다.');
-    const v20Matches = htmlSrc.match(/\?v=20261115_v20/g) || [];
-    assert.strictEqual(v20Matches.length, 7, 'index.html의 app.css + 6개 script 태그 모두 ?v=20261115_v20이어야 합니다.');
-    assert.ok(swSrc.includes("const CACHE_NAME = 'zen-reader-v20';"), 'sw.js CACHE_NAME이 zen-reader-v20여야 합니다.');
+    assert.strictEqual(htmlSrc.includes('v20261115_v20'), false, 'index.html에 구버전 v20 쿼리스트링이 남아있으면 안 됩니다.');
+    const v21Matches = htmlSrc.match(/\?v=20261115_v21/g) || [];
+    assert.strictEqual(v21Matches.length, 7, 'index.html의 app.css + 6개 script 태그 모두 ?v=20261115_v21이어야 합니다.');
+    assert.ok(swSrc.includes("const CACHE_NAME = 'zen-reader-v21';"), 'sw.js CACHE_NAME이 zen-reader-v21여야 합니다.');
+    assert.ok(htmlSrc.includes('id="header-resume-btn"'), 'index.html 우상단에 이어 읽기 버튼(#header-resume-btn)이 있어야 합니다.');
 
     assert.ok(/DB_VERSION:\s*2\b/.test(offlineSrc), 'offline.js의 DB_VERSION이 2여야 합니다.');
     assert.ok(offlineSrc.includes('ZenStorage.openDB()'), 'offline.js가 ZenStorage.openDB()에 위임해야 합니다.');
@@ -1008,10 +1010,15 @@ async function runV18Tests() {
       '.icon-spin-target',
       '.view-enter',
       '.status-dot',
-      '.pin-modal-icon'
+      '.pin-modal-icon',
+      '.doc-card-header-row',
+      '.doc-card-badges'
     ].forEach(cls => {
       assert.ok(cssSrc.includes(cls), `app.css에 ${cls} 스타일이 정의되어 있어야 합니다.`);
     });
+    assert.ok(cssSrc.includes('min-width: 96px'), 'app.css .doc-card-badges에 최소 슬롯 너비가 고정되어 있어야 합니다.');
+    assert.ok(cssSrc.includes('-webkit-line-clamp: 2'), 'app.css .doc-card-title은 최대 2행(-webkit-line-clamp: 2)으로 제한되어야 합니다.');
+    assert.ok(!/\.offline-filter-pill:active\s*\{[\s\S]*?\}\s*color:\s*var\(--text-primary\)/.test(cssSrc), 'app.css에 깨진 CSS 중괄호 잔재가 없어야 합니다.');
 
     assert.ok(notionSrc.includes('createConcurrencyLimiter(3)'), 'api/lib/notion.js에 동시성 3 제한기가 적용되어 있어야 합니다.');
 
@@ -1366,5 +1373,55 @@ async function runV18Tests() {
     assert.strictEqual(readerRefreshBtn.disabled, false, '완료 후 뷰어 새로고침 버튼 disabled가 해제되어야 합니다.');
 
     console.log('✅ [Test 19 PASS] 수동 새로고침 중복 연타 방지 및 로딩 상태 정리 검증 완료');
+  }
+
+  // =========================================================================
+  // Test 20: v21 서재 카드 헤더 통일(.doc-card-header-row) & 이어 읽기(openLastReadDoc) 검증
+  // =========================================================================
+  console.log('🧪 [Test 20] v21 카드 우측 뱃지 슬롯 통일 및 우상단 이어 읽기 동작 검증');
+  {
+    const reg = resetDomMocks();
+    const storage = loadFreshZenStorage();
+    loadFreshAppAndReader();
+
+    await storage.saveDocument({
+      id: 'doc-cinn',
+      title: '신나리진 어지럼증 전정기능장애 감별 및 1차 약물 선택 기준 페이지',
+      updatedAt: '2026-11-15T00:00:00.000Z',
+      blocks: []
+    });
+
+    App.documents = [
+      { id: 'doc-cinn', title: '신나리진 어지럼증 전정기능장애 감별 및 1차 약물 선택 기준 페이지', status: '시작 전', reviewCount: 0, createdAt: '2026-11-14T00:00:00.000Z', tags: ['이비인후과'] },
+      { id: 'doc-betahist', title: '베타히스틴 메니에르병 장기 유지 요법 핵심 정리 페이지', status: '완료', reviewCount: 2, createdAt: '2026-11-13T00:00:00.000Z', tags: ['이비인후과'] }
+    ];
+    App.filteredDocuments = [...App.documents];
+    App.renderDocumentList();
+
+    const listHtml = reg.getEl('doc-card-list').innerHTML;
+    const headerRowMatches = listHtml.match(/class="doc-card-header-row"/g) || [];
+    const badgeSlotMatches = listHtml.match(/class="doc-card-badges"/g) || [];
+    assert.strictEqual(headerRowMatches.length, 2, '회독 유무와 관계없이 모든 카드가 doc-card-header-row로 렌더링되어야 합니다.');
+    assert.strictEqual(badgeSlotMatches.length, 2, '회독 유무와 관계없이 모든 카드가 고정폭 doc-card-badges 슬롯을 가져야 합니다.');
+
+    // 최근 학습 이어 읽기 검증
+    let openedIds = [];
+    const origOpen = Reader.open.bind(Reader);
+    Reader.open = async (id) => {
+      openedIds.push(id);
+      localStorage.setItem('zen_last_read_doc_id', id);
+    };
+
+    // 이력 없을 때는 미완료 우선 문서 오픈
+    App.openLastReadDoc();
+    assert.strictEqual(openedIds[0], 'doc-cinn', '최근 열람 이력이 없을 때 미완료 첫 문서로 폴백해야 합니다.');
+
+    // 특정 문서 열람 후 이어 읽기 호출 시 해당 문서 오픈
+    await Reader.open('doc-betahist');
+    App.openLastReadDoc();
+    assert.strictEqual(openedIds[openedIds.length - 1], 'doc-betahist', '최근 열람 문서 ID(zen_last_read_doc_id)를 우선 열람해야 합니다.');
+    Reader.open = origOpen;
+
+    console.log('✅ [Test 20 PASS] 카드 제목 영역 통일 및 이어 읽기 동작 검증 완료');
   }
 }

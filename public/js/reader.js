@@ -72,6 +72,11 @@ const Reader = {
 
   async open(docId, pushHistory = true) {
     const openToken = ++this._openSeq;
+    try {
+      if (typeof localStorage !== 'undefined' && docId) {
+        localStorage.setItem('zen_last_read_doc_id', docId);
+      }
+    } catch (e) {}
 
     if (typeof App !== 'undefined' && typeof App.showView === 'function') {
       App.showView('reader', false);
