@@ -963,7 +963,8 @@ async function runV18Tests() {
     const cssSrc = fs.readFileSync(path.join(__dirname, '../public/css/app.css'), 'utf-8');
     const notionSrc = fs.readFileSync(path.join(__dirname, '../api/lib/notion.js'), 'utf-8');
 
-    assert.ok(swSrc.includes("const CACHE_NAME = 'zen-reader-v21'"), 'sw.js CACHE_NAME이 zen-reader-v21이어야 합니다.');
+    assert.ok(swSrc.includes("const CACHE_NAME = 'zen-reader-v22'"), 'sw.js CACHE_NAME이 zen-reader-v22여야 합니다.');
+    assert.ok(swSrc.includes("'/js/vendor/mermaid.min.js'"), 'sw.js STATIC_ASSETS에 /js/vendor/mermaid.min.js가 포함되어야 합니다.');
     assert.ok(swSrc.includes("const DATA_CACHE_NAME = 'zen-data-v1'"), 'sw.js DATA_CACHE_NAME이 zen-data-v1이어야 합니다.');
     assert.ok(
       swSrc.includes('PRESERVED_CACHES = [CACHE_NAME, DATA_CACHE_NAME, IMAGE_CACHE_NAME]'),
@@ -985,10 +986,13 @@ async function runV18Tests() {
     assert.strictEqual(htmlSrc.includes('v20261115_v18'), false, 'index.html에 구버전 v18 쿼리스트링이 남아있으면 안 됩니다.');
     assert.strictEqual(htmlSrc.includes('v20261115_v19'), false, 'index.html에 구버전 v19 쿼리스트링이 남아있으면 안 됩니다.');
     assert.strictEqual(htmlSrc.includes('v20261115_v20'), false, 'index.html에 구버전 v20 쿼리스트링이 남아있으면 안 됩니다.');
-    const v21Matches = htmlSrc.match(/\?v=20261115_v21/g) || [];
-    assert.strictEqual(v21Matches.length, 7, 'index.html의 app.css + 6개 script 태그 모두 ?v=20261115_v21이어야 합니다.');
-    assert.ok(swSrc.includes("const CACHE_NAME = 'zen-reader-v21';"), 'sw.js CACHE_NAME이 zen-reader-v21여야 합니다.');
+    assert.strictEqual(htmlSrc.includes('v20261115_v21'), false, 'index.html에 구버전 v21 쿼리스트링이 남아있으면 안 됩니다.');
+    const v22Matches = htmlSrc.match(/\?v=20261115_v22/g) || [];
+    assert.strictEqual(v22Matches.length, 8, 'index.html의 app.css + mermaid + 6개 script 태그 모두 ?v=20261115_v22여야 합니다.');
+    assert.ok(swSrc.includes("const CACHE_NAME = 'zen-reader-v22';"), 'sw.js CACHE_NAME이 zen-reader-v22여야 합니다.');
     assert.ok(htmlSrc.includes('id="header-resume-btn"'), 'index.html 우상단에 이어 읽기 버튼(#header-resume-btn)이 있어야 합니다.');
+    assert.ok(htmlSrc.includes('id="mermaid-zoom-modal"'), 'index.html에 Mermaid 확대 모달(#mermaid-zoom-modal)이 있어야 합니다.');
+    assert.ok(cssSrc.includes('.zen-mermaid-card') && cssSrc.includes('.tok-kw'), 'app.css에 Mermaid 카드 및 구문 강조 스타일이 포함되어야 합니다.');
 
     assert.ok(/DB_VERSION:\s*2\b/.test(offlineSrc), 'offline.js의 DB_VERSION이 2여야 합니다.');
     assert.ok(offlineSrc.includes('ZenStorage.openDB()'), 'offline.js가 ZenStorage.openDB()에 위임해야 합니다.');
@@ -1423,5 +1427,61 @@ async function runV18Tests() {
     Reader.open = origOpen;
 
     console.log('✅ [Test 20 PASS] 카드 제목 영역 통일 및 이어 읽기 동작 검증 완료');
+  }
+
+  // =========================================================================
+  // Test 21: v22 Mermaid 다이어그램 카드, 코드/마크다운 구문 강조, heading_4, Callout 색상
+  // =========================================================================
+  console.log('🧪 [Test 21] v22 Mermaid 카드, 코드 구문 강조(XSS 포함), heading_4 및 Callout 색상 검증');
+  {
+    Reader.headingsList = [];
+    Reader.headingCounter = 0;
+    Reader.mermaidCounter = 0;
+    Reader._mermaidSources = {};
+
+    const sampleBlocks = [
+      { type: 'heading_4', text: 'Table 2: 핵심 평가변수', html: 'Table 2: 핵심 평가변수' },
+      { type: 'callout', icon: '🎨', color: 'blue_background', text: '색상 범례', html: '<strong>색상 범례</strong>', children: [] },
+      { type: 'code', language: 'mermaid', code: 'flowchart TD\n    A["CKD (eGFR >=20)"] -->|"권고 1A"| B["SGLT2i 개시"]' },
+      { type: 'code', language: 'markdown', code: '# CKD 2027 요약\n> 핵심 권고: `SGLT2i` **1A**\n- K+ <=4.8 mmol/L --> 개시 가능\n<script>alert(1)</script>' }
+    ];
+
+    const rendered = Reader.renderBlocks(sampleBlocks);
+
+    assert.ok(rendered.includes('<h4 id="zen-heading-1">Table 2: 핵심 평가변수</h4>'), 'heading_4가 h4 태그로 렌더링되어야 합니다.');
+    assert.strictEqual(Reader.headingsList.length, 0, 'heading_4는 우측 플로팅 TOC dot 레일에 중복 적재되지 않아야 합니다.');
+    assert.ok(rendered.includes('zen-callout notion-callout-blue_background'), 'callout 블록 배경색 클래스가 반영되어야 합니다.');
+    assert.ok(rendered.includes('zen-mermaid-card'), 'mermaid 코드 블록이 다이어그램 카드(.zen-mermaid-card)로 변환되어야 합니다.');
+    assert.ok(rendered.includes('FLOWCHART TD'), 'Mermaid 헤더에 다이어그램 유형 뱃지가 표시되어야 합니다.');
+    assert.ok(rendered.includes('Reader.openMermaidModal('), 'Mermaid 확대 모달 버튼이 포함되어야 합니다.');
+    assert.ok(rendered.includes('Reader.toggleMermaidFit(') && rendered.includes('둘러보기'), 'Mermaid 카드에 터치 둘러보기 전환 버튼이 포함되어야 합니다.');
+    assert.ok(rendered.includes('zen-mermaid-stage'), 'Mermaid 카드에 2D 팬·줌 스테이지(.zen-mermaid-stage)가 포함되어야 합니다.');
+    assert.ok(rendered.includes('tok-heading') && rendered.includes('tok-str') && rendered.includes('tok-kw') && rendered.includes('tok-op'), 'Markdown 코드 블록에 다중 색상 구문 강조 토큰 클래스가 적용되어야 합니다.');
+    assert.ok(!rendered.includes('<script>') && rendered.includes('&lt;script&gt;') && rendered.includes('&lt;/script&gt;'), '구문 강조 후에도 XSS 태그가 안전하게 이스케이프되어야 합니다.');
+
+    console.log('✅ [Test 21 PASS] v22 Mermaid 카드, 코드 구문 강조 및 정합성 패치 검증 완료');
+  }
+
+  // =========================================================================
+  // Test 22: v22 2D 팬·줌 엔진 & 우측 반투명 TOC 패스트 스크롤 계약 검증
+  // =========================================================================
+  console.log('🧪 [Test 22] Mermaid 2D 팬·줌, TOC 레일 반투명 대기, 패스트 스크롤 및 스와이프 충돌 가드 검증');
+  {
+    const readerSrc = fs.readFileSync(path.join(__dirname, '../public/js/reader.js'), 'utf-8');
+    const cssSrc = fs.readFileSync(path.join(__dirname, '../public/css/app.css'), 'utf-8');
+
+    assert.strictEqual(typeof Reader.bindPanZoomSurface, 'function', 'Reader.bindPanZoomSurface 메서드가 존재해야 합니다.');
+    assert.strictEqual(typeof Reader.setMermaidCardExplore, 'function', 'Reader.setMermaidCardExplore 메서드가 존재해야 합니다.');
+    assert.strictEqual(typeof Reader.toggleMermaidModalRotate, 'function', 'Reader.toggleMermaidModalRotate 메서드가 존재해야 합니다.');
+    assert.strictEqual(typeof Reader.fitMermaidModal, 'function', 'Reader.fitMermaidModal 메서드가 존재해야 합니다.');
+    assert.strictEqual(typeof Reader.wakeTocRail, 'function', 'Reader.wakeTocRail 메서드가 존재해야 합니다.');
+    assert.strictEqual(typeof Reader.scrubTocToClientY, 'function', 'Reader.scrubTocToClientY 메서드가 존재해야 합니다.');
+
+    assert.ok(cssSrc.includes('.zen-toc-rail.is-idle') && cssSrc.includes('.zen-toc-scrub-pill.visible'), 'app.css에 TOC 레일 반투명 상태 및 실시간 스크러버 말풍선 스타일이 있어야 합니다.');
+    assert.ok(cssSrc.includes('.zen-mermaid-card.is-explore .zen-mermaid-viewport') && cssSrc.includes('touch-action: none'), 'app.css에 카드 내 2D 탐색 모드(touch-action: none) 스타일이 있어야 합니다.');
+    assert.ok(cssSrc.includes('.mermaid-zoom-box.is-rotated') && cssSrc.includes('rotate(90deg)'), 'app.css에 다이어그램 뷰어 전용 90도 가로 회전 스타일이 있어야 합니다.');
+    assert.ok(readerSrc.includes("tgt.closest('#zen-toc-rail, .zen-mermaid-card.is-explore, #mermaid-zoom-modal')"), '가장자리 스와이프 뒤로가기(setupSwipeToBack)가 TOC 스크러버/다이어그램 탐색 중 오작동을 차단해야 합니다.');
+
+    console.log('✅ [Test 22 PASS] Mermaid 2D 팬·줌 및 우측 반투명 TOC 패스트 스크롤 검증 완료');
   }
 }

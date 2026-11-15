@@ -290,6 +290,9 @@ const App = {
     if (typeof Settings !== 'undefined' && Settings.updateThemeButtons) {
       Settings.updateThemeButtons(theme);
     }
+    if (typeof Reader !== 'undefined' && typeof Reader.rerenderMermaidDiagrams === 'function') {
+      Reader.rerenderMermaidDiagrams();
+    }
   },
 
   toggleTheme() {

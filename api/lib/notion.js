@@ -455,6 +455,10 @@ function simplifyBlock(block) {
     html: html || escapeHtml(text)
   };
 
+  if (content.color && content.color !== 'default') {
+    result.color = content.color;
+  }
+
   if (type === 'callout') {
     result.icon = content.icon?.emoji || "📌";
   } else if (type === 'code') {

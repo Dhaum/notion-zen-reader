@@ -20,6 +20,18 @@
   --danger: #ef4444;
   --dock-bg: rgba(20, 25, 35, 0.88);
   --dock-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.09);
+  --code-bg: #0b1120;
+  --code-header-bg: rgba(255, 255, 255, 0.04);
+  --code-text: #e2e8f0;
+  --code-kw: #c084fc;
+  --code-str: #86efac;
+  --code-num: #fbbf24;
+  --code-comment: #64748b;
+  --code-op: #38bdf8;
+  --code-heading: #7dd3fc;
+  --code-node: #f472b6;
+  --code-quote: #94a3b8;
+  --code-delim: #93c5fd;
   --font-base: 17.5px;
   --line-height-base: 1.85;
   --content-max-width: 760px;
@@ -40,6 +52,18 @@ body.theme-light {
   --accent-subtle: rgba(2, 132, 199, 0.1);
   --dock-bg: rgba(255, 255, 255, 0.92);
   --dock-shadow: 0 10px 28px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  --code-bg: #f3efe7;
+  --code-header-bg: rgba(15, 23, 42, 0.04);
+  --code-text: #1e293b;
+  --code-kw: #7c3aed;
+  --code-str: #0f766e;
+  --code-num: #c2410c;
+  --code-comment: #64748b;
+  --code-op: #0284c7;
+  --code-heading: #0369a1;
+  --code-node: #be185d;
+  --code-quote: #475569;
+  --code-delim: #334155;
 }
 
 /* Muted Amber Sepia (2700K 킨들 웜라이트 취침 전 안락 모드) */
@@ -57,6 +81,18 @@ body.theme-sepia {
   --accent-subtle: rgba(180, 83, 9, 0.12);
   --dock-bg: rgba(249, 242, 228, 0.94);
   --dock-shadow: 0 10px 28px rgba(78, 55, 25, 0.16), 0 0 0 1px rgba(180, 83, 9, 0.15);
+  --code-bg: #ebe1ca;
+  --code-header-bg: rgba(45, 36, 23, 0.05);
+  --code-text: #2d2417;
+  --code-kw: #7e22ce;
+  --code-str: #166534;
+  --code-num: #9a3412;
+  --code-comment: #826e54;
+  --code-op: #b45309;
+  --code-heading: #92400e;
+  --code-node: #9d174d;
+  --code-quote: #574834;
+  --code-delim: #6b563c;
 }
 
 /* Evergreen Eye-Comfort Green (에버그린 1 #b5d692, 에버그린 2 #a3cca2, 메도우 그린 #8bc34a) */
@@ -74,6 +110,18 @@ body.theme-green {
   --accent-subtle: rgba(139, 195, 74, 0.18);
   --dock-bg: rgba(245, 250, 240, 0.94);
   --dock-shadow: 0 10px 28px rgba(25, 51, 30, 0.14), 0 0 0 1px rgba(163, 204, 163, 0.4);
+  --code-bg: #e2eed9;
+  --code-header-bg: rgba(25, 51, 30, 0.05);
+  --code-text: #19331e;
+  --code-kw: #6d28d9;
+  --code-str: #15803d;
+  --code-num: #b45309;
+  --code-comment: #5e8266;
+  --code-op: #0f766e;
+  --code-heading: #33691e;
+  --code-node: #be185d;
+  --code-quote: #3b5c42;
+  --code-delim: #3f6212;
 }
 
 /* 폰트 크기 옵션 */
@@ -749,6 +797,20 @@ body.theme-green .doc-tag.doc-tag-active {
   font-weight: 700;
 }
 
+.reader-body h3 {
+  font-size: 1.08rem;
+  margin: 20px 0 10px 0;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.reader-body h4 {
+  font-size: 0.98rem;
+  margin: 16px 0 8px 0;
+  font-weight: 700;
+  color: var(--accent);
+}
+
 .reader-body p {
   margin-bottom: 18px;
   letter-spacing: -0.01em;
@@ -828,33 +890,35 @@ body.theme-green .doc-tag.doc-tag-active {
 /* 코드 블록 & ASCII 다이어그램 (고정폭 및 태블릿 가로 스크롤 최적화) */
 .zen-code-wrapper {
   margin: 18px 0 24px;
-  background-color: #0b1120;
+  background-color: var(--code-bg);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
 }
 
 .zen-code-lang {
   font-size: 0.72rem;
   font-family: var(--font-family-mono);
   color: var(--text-muted);
-  padding: 4px 14px;
-  background: rgba(255, 255, 255, 0.04);
+  padding: 5px 14px;
+  background: var(--code-header-bg);
   border-bottom: 1px solid var(--border-color);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  font-weight: 600;
 }
 
 .zen-code-block {
   margin: 0;
-  padding: 16px 18px;
+  padding: 15px 18px;
   overflow-x: auto;
   font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, Menlo, monospace;
-  font-size: 0.86rem;
+  font-size: 0.85rem;
   line-height: 1.65;
   white-space: pre;
-  color: #38bdf8;
+  color: var(--code-text);
+  background-color: var(--code-bg);
   tab-size: 2;
   -webkit-overflow-scrolling: touch;
 }
@@ -1127,6 +1191,17 @@ body.theme-sepia .notion-color-blue { color: #1d4ed8; }
 body.theme-sepia .notion-color-purple { color: #6b21a8; }
 body.theme-sepia .notion-color-pink { color: #9d174d; }
 body.theme-sepia .notion-color-red { color: #b91c1c; }
+
+/* 4) 에버그린 초록 모드 대응 */
+body.theme-green .notion-color-gray { color: #526857; }
+body.theme-green .notion-color-brown { color: #64473a; }
+body.theme-green .notion-color-orange { color: #c2590a; }
+body.theme-green .notion-color-yellow { color: #a16207; }
+body.theme-green .notion-color-green { color: #166534; }
+body.theme-green .notion-color-blue { color: #0369a1; }
+body.theme-green .notion-color-purple { color: #6d28d9; }
+body.theme-green .notion-color-pink { color: #be185d; }
+body.theme-green .notion-color-red { color: #dc2626; }
 
 /* 4) 배경 하이라이트 색상 */
 .notion-color-gray_background { background-color: rgba(135, 131, 120, 0.25); padding: 2px 5px; border-radius: 4px; }
@@ -2605,7 +2680,7 @@ body.theme-green .status-pill.active {
 
 /* ============================================================
    리더 뷰 마이크로 목차 레일 (TOC Scrubber)
-   8.4인치 태블릿 우측 썸 존 최적화
+   8.4인치 태블릿 우측 썸 존 최적화 · 대기 시 반투명 / 드래그 패스트 스크롤
    ============================================================ */
 .zen-toc-rail {
   position: fixed;
@@ -2615,17 +2690,31 @@ body.theme-green .status-pill.active {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 10px 5px;
-  background: rgba(15, 23, 42, 0.55);
+  gap: clamp(5px, 0.9vh, 10px);
+  padding: 12px 7px;
+  background: var(--dock-bg);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-color);
   border-radius: 20px;
   z-index: 85;
   touch-action: none;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: ns-resize;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  opacity: 0.24;
+  transition: opacity 0.35s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.zen-toc-rail.is-idle {
+  opacity: 0.22;
+}
+
+.zen-toc-rail.is-active,
+.zen-toc-rail:hover {
+  opacity: 1;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
 }
 
 .zen-toc-dot {
@@ -2633,9 +2722,9 @@ body.theme-green .status-pill.active {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: rgba(148, 163, 184, 0.4);
+  background: rgba(148, 163, 184, 0.45);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
@@ -2643,46 +2732,55 @@ body.theme-green .status-pill.active {
 .zen-toc-dot.dot-h1 {
   width: 9px;
   height: 9px;
-  background: rgba(148, 163, 184, 0.65);
+  background: rgba(148, 163, 184, 0.72);
 }
 
 .zen-toc-dot.dot-h3 {
   width: 5px;
   height: 5px;
-  background: rgba(148, 163, 184, 0.3);
+  background: rgba(148, 163, 184, 0.35);
 }
 
 .zen-toc-dot:hover,
 .zen-toc-dot.active {
   background: var(--accent);
-  transform: scale(1.4);
+  transform: scale(1.45);
   box-shadow: 0 0 10px var(--accent);
 }
 
-.zen-toc-tooltip {
-  position: absolute;
-  right: 20px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-  padding: 5px 11px;
-  border-radius: 6px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  white-space: nowrap;
-  pointer-events: none;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-  display: none;
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  z-index: 90;
+.zen-toc-dot.scrubbing {
+  transform: scale(1.85);
 }
 
-.zen-toc-dot:hover .zen-toc-tooltip {
-  display: block;
+/* 패스트 스크롤 실시간 주제 프리뷰 말풍선 (터치 드래그·클릭 시 점 위치 추적) */
+.zen-toc-scrub-pill {
+  position: absolute;
+  right: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%) translateX(6px);
+  background: var(--bg-card);
+  border: 1px solid var(--accent);
+  color: var(--text-primary);
+  padding: 6px 12px;
+  border-radius: 9px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+  max-width: min(260px, 64vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 95;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.zen-toc-scrub-pill.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) translateX(0);
 }
 
 /* ==========================================================================
@@ -2906,6 +3004,311 @@ body.theme-green .cache-orphan-warn {
 
 .dock-btn-accent.completed {
   background-color: rgba(16, 185, 129, 0.16);
+}
+
+/* ============================================================
+   코드/마크다운 구문 강조 토큰 & Mermaid 알고리즘 다이어그램 UI
+   ============================================================ */
+.tok-kw { color: var(--code-kw); font-weight: 600; }
+.tok-str { color: var(--code-str); }
+.tok-num { color: var(--code-num); font-weight: 600; }
+.tok-comment { color: var(--code-comment); font-style: italic; }
+.tok-op { color: var(--code-op); font-weight: 600; }
+.tok-heading { color: var(--code-heading); font-weight: 700; }
+.tok-node { color: var(--code-node); font-weight: 600; }
+.tok-quote { color: var(--code-quote); font-style: italic; }
+.tok-delim { color: var(--code-delim); }
+.tok-list { color: var(--code-num); font-weight: 700; }
+.tok-link { color: var(--code-op); text-decoration: underline; text-underline-offset: 2px; }
+
+/* 노션 블록 단위 Callout 배경색 지원 */
+.zen-callout.notion-callout-gray_background { background-color: rgba(135, 131, 120, 0.12); border-color: rgba(135, 131, 120, 0.35); }
+.zen-callout.notion-callout-brown_background { background-color: rgba(140, 46, 0, 0.10); border-color: rgba(180, 100, 60, 0.32); }
+.zen-callout.notion-callout-orange_background { background-color: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.35); }
+.zen-callout.notion-callout-yellow_background { background-color: rgba(234, 179, 8, 0.12); border-color: rgba(234, 179, 8, 0.35); }
+.zen-callout.notion-callout-green_background { background-color: rgba(16, 185, 129, 0.11); border-color: rgba(16, 185, 129, 0.32); }
+.zen-callout.notion-callout-blue_background { background-color: rgba(56, 189, 248, 0.11); border-color: rgba(56, 189, 248, 0.32); }
+.zen-callout.notion-callout-purple_background { background-color: rgba(139, 92, 246, 0.11); border-color: rgba(139, 92, 246, 0.32); }
+.zen-callout.notion-callout-pink_background { background-color: rgba(236, 72, 153, 0.11); border-color: rgba(236, 72, 153, 0.32); }
+.zen-callout.notion-callout-red_background { background-color: rgba(239, 68, 68, 0.11); border-color: rgba(239, 68, 68, 0.32); }
+
+/* Mermaid 다이어그램 카드 */
+.zen-mermaid-card {
+  margin: 18px 0 24px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.zen-mermaid-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  flex-wrap: wrap;
+}
+
+.zen-mermaid-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.zen-mermaid-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background-color: var(--accent);
+}
+
+.zen-mermaid-type {
+  font-family: var(--font-family-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background-color: var(--accent-subtle);
+  color: var(--accent);
+}
+
+.zen-mermaid-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.zen-mermaid-btn {
+  appearance: none;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  color: var(--text-secondary);
+  border-radius: 7px;
+  padding: 4px 9px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.12s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.zen-mermaid-btn:active {
+  transform: scale(0.95);
+}
+
+.zen-mermaid-btn-primary {
+  border-color: var(--accent);
+  color: var(--accent);
+  background-color: var(--accent-subtle);
+}
+
+.zen-mermaid-zoom-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.zen-mermaid-scale-badge {
+  font-family: var(--font-family-mono);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  min-width: 38px;
+  text-align: center;
+}
+
+.zen-mermaid-viewport {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  padding: 16px 14px 28px;
+  background-color: var(--bg-card);
+}
+
+.zen-mermaid-stage {
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.zen-mermaid-render {
+  min-width: max-content;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.zen-mermaid-render svg {
+  display: block;
+  height: auto;
+  max-width: none !important;
+}
+
+.zen-mermaid-hint {
+  position: absolute;
+  right: 10px;
+  bottom: 7px;
+  font-size: 0.69rem;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 2px 7px;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+/* 기본 '한눈에 보기(Fit)' 모드: 본문 스크롤을 방해하지 않고 전체 구조를 카드 폭에 맞춰 즉시 조망 */
+.zen-mermaid-card.is-fit .zen-mermaid-viewport {
+  touch-action: pan-y;
+  cursor: zoom-in;
+}
+
+.zen-mermaid-card.is-fit .zen-mermaid-render {
+  min-width: 0;
+  width: 100%;
+}
+
+.zen-mermaid-card.is-fit .zen-mermaid-render svg {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+/* 카드 내 2D '둘러보기(Explore)' 모드: 고정 높이 뷰포트 내 한 손가락 터치 드래그 + 핀치 줌 */
+.zen-mermaid-card.is-explore .zen-mermaid-viewport {
+  height: min(440px, 58vh);
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  padding: 0;
+}
+
+.zen-mermaid-card.is-explore .zen-mermaid-viewport.is-panning {
+  cursor: grabbing;
+}
+
+.zen-mermaid-card.is-explore .zen-mermaid-render {
+  justify-content: flex-start;
+}
+
+.zen-mermaid-loading {
+  padding: 20px 12px;
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.zen-mermaid-error {
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  color: var(--warning);
+  background-color: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 8px;
+}
+
+.zen-mermaid-source {
+  border-top: 1px solid var(--border-color);
+}
+
+/* Mermaid 전체화면 확대 모달 */
+.mermaid-zoom-overlay {
+  padding: 12px;
+  z-index: 1200;
+}
+
+.mermaid-zoom-box {
+  width: 100%;
+  max-width: 1100px;
+  height: 88vh;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+  transition: transform 0.22s ease;
+}
+
+/* 일시적 다이어그램 전용 가로 90° 보기 */
+.mermaid-zoom-box.is-rotated {
+  width: calc(100vh - 20px);
+  width: calc(100dvh - 20px);
+  height: calc(100vw - 20px);
+  height: calc(100dvw - 20px);
+  max-width: none;
+  max-height: none;
+  flex-shrink: 0;
+  transform: rotate(90deg);
+}
+
+.mermaid-zoom-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.mermaid-zoom-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.mermaid-zoom-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.mermaid-zoom-controls .btn.active {
+  border-color: var(--accent);
+  background-color: var(--accent-subtle);
+  color: var(--accent);
+}
+
+.mermaid-zoom-level {
+  font-family: var(--font-family-mono);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  min-width: 44px;
+  text-align: center;
+}
+
+.mermaid-zoom-close {
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.mermaid-zoom-body {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  padding: 0;
+  background-color: var(--bg-card);
+}
+
+.mermaid-zoom-body.is-panning {
+  cursor: grabbing;
+}
+
+.mermaid-zoom-stage {
+  display: inline-block;
+  transform-origin: 0 0;
+  will-change: transform;
 }
 
 @media (prefers-reduced-motion: reduce) {

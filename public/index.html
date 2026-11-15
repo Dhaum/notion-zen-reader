@@ -16,7 +16,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon.png">
 
-  <link rel="stylesheet" href="/css/app.css?v=20261115_v21">
+  <link rel="stylesheet" href="/css/app.css?v=20261115_v22">
 </head>
 <body class="theme-dark font-md">
 
@@ -222,12 +222,34 @@
     </div>
   </div>
 
+  <!-- Mermaid 다이어그램 전체화면 확대 모달 -->
+  <div id="mermaid-zoom-modal" class="modal-overlay mermaid-zoom-overlay" style="display: none;" onclick="if(event.target===this) Reader.closeMermaidModal()">
+    <div id="mermaid-zoom-box" class="mermaid-zoom-box">
+      <div class="mermaid-zoom-toolbar">
+        <span id="mermaid-zoom-title" class="mermaid-zoom-title">알고리즘 다이어그램</span>
+        <div class="mermaid-zoom-controls">
+          <button type="button" id="mermaid-zoom-rotate-btn" class="btn btn-sm" onclick="Reader.toggleMermaidModalRotate()" aria-label="90도 가로 회전">90° 가로</button>
+          <button type="button" class="btn btn-sm" onclick="Reader.fitMermaidModal()" aria-label="화면 맞춤">맞춤</button>
+          <button type="button" class="btn btn-sm" onclick="Reader.zoomMermaidModal(-0.2)" aria-label="축소">－</button>
+          <span id="mermaid-zoom-level" class="mermaid-zoom-level">100%</span>
+          <button type="button" class="btn btn-sm" onclick="Reader.zoomMermaidModal(0.2)" aria-label="확대">＋</button>
+          <button type="button" class="btn btn-sm" onclick="Reader.zoomMermaidModal(0)" aria-label="원래 크기">1:1</button>
+          <button type="button" class="btn btn-sm mermaid-zoom-close" onclick="Reader.closeMermaidModal()" aria-label="닫기">닫기</button>
+        </div>
+      </div>
+      <div id="mermaid-zoom-body" class="mermaid-zoom-body">
+        <div id="mermaid-zoom-stage" class="mermaid-zoom-stage"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- 스크립트 로딩 -->
-  <script src="/js/storage-idb.js?v=20261115_v21"></script>
-  <script src="/js/offline.js?v=20261115_v21"></script>
-  <script src="/js/reader.js?v=20261115_v21"></script>
-  <script src="/js/dashboard.js?v=20261115_v21"></script>
-  <script src="/js/settings.js?v=20261115_v21"></script>
-  <script src="/js/app.js?v=20261115_v21"></script>
+  <script src="/js/vendor/mermaid.min.js?v=20261115_v22"></script>
+  <script src="/js/storage-idb.js?v=20261115_v22"></script>
+  <script src="/js/offline.js?v=20261115_v22"></script>
+  <script src="/js/reader.js?v=20261115_v22"></script>
+  <script src="/js/dashboard.js?v=20261115_v22"></script>
+  <script src="/js/settings.js?v=20261115_v22"></script>
+  <script src="/js/app.js?v=20261115_v22"></script>
 </body>
 </html>

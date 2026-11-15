@@ -1,5 +1,5 @@
 // public/sw.js - PWA 오프라인 캐싱, 영구 이미지 보존 및 백그라운드 동기화 서비스 워커
-const CACHE_NAME = 'zen-reader-v21';
+const CACHE_NAME = 'zen-reader-v22';
 const DATA_CACHE_NAME = 'zen-data-v1';
 const IMAGE_CACHE_NAME = 'zen-images-v1';
 
@@ -7,6 +7,7 @@ const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/css/app.css',
+  '/js/vendor/mermaid.min.js',
   '/js/storage-idb.js',
   '/js/app.js',
   '/js/reader.js',
